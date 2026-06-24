@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum KycStatus {
+  INCOMPLETE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum StripeProvisioningStatus {
+  NONE
+  PENDING
+  ACTIVE
+  FAILED
+}
+
+enum DirectPayProvisioningStatus {
+  NONE
+  PENDING
+  ACTIVE
+  FAILED
+}
+
+enum FundingOrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+enum VirtualCardStatus {
+  ACTIVE
+  INACTIVE
+  CANCELED
+}
+
+enum WalletTransactionType {
+  DEPOSIT
+  CARD_FUND
+  ADJUSTMENT
+}
+
+enum CardFundTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+model User {
+  id                       String                   @id @default(uuid())
+  email                    String                   @unique
+  firstName                String?                  @map("first_name")
+  lastName                 String?                  @map("last_name")
+  phone                    String?
+  phoneE164                String?                  @unique @map("phone_e164")
+  dateOfBirth              String?                  @map("date_of_birth")
+  address                  String?
+  city                     String?
+  country                  String?
+  countryCode              String?                  @map("country_code")
+  postalCode               String?                  @map("postal_code")
+  kycStatus                KycStatus                @default(INCOMPLETE) @map("kyc_status")
+  kycComplete              Boolean                  @default(false) @map("kyc_complete")
+  documentType             String?                  @map("document_type")
+  documentFrontUrl         String?                  @map("document_front_url")
+  documentBackUrl          String?                  @map("document_back_url")
+  kycSubmittedAt           DateTime?                @map("kyc_submitted_at")
+  kycRejectionReason       String?                  @map("kyc_rejection_reason")
+  cardTermsAcceptedAt      DateTime?                @map("card_terms_accepted_at")
+  cardTermsAcceptedIp      String?                  @map("card_terms_accepted_ip")
+  stripeConnectedAccountId String?                  @unique @map("stripe_connected_account_id")
+  stripeFinancialAccountId String?                  @map("stripe_financial_account_id")
+  stripeProvisioningStatus StripeProvisioningStatus @default(NONE) @map("stripe_provisioning_status")
+  stripeProvisioningError  String?                  @map("stripe_provisioning_error")
+  directPayBusinessId      String?                  @map("directpay_business_id")
+  directPaySlug            String?                  @map("directpay_slug")
+  directPayProvisioningStatus DirectPayProvisioningStatus @default(NONE) @map("directpay_provisioning_status")
+  directPayProvisioningError  String?                  @map("directpay_provisioning_error")
+  simulatedBalanceUsd        Float                    @default(0) @map("simulated_balance_usd")
+  stripeTestInboundPaymentMethod String?              @map("stripe_test_inbound_payment_method")
+  createdAt                DateTime                 @default(now()) @map("created_at")
+  updatedAt                DateTime                 @updatedAt @map("updated_at")
+
+  virtualCards         VirtualCard[]
+  fundingOrders        FundingOrder[]
+  vpayWallet           VPayWallet?
+  cardFundTransactions CardFundTransaction[]
+
+  @@map("users")
+}
+
+model VirtualCard {
+  id                  String            @id @default(uuid())
+  userId              String            @map("user_id")
+  stripeCardId        String            @unique @map("stripe_card_id")
+  stripeCardholderId  String            @map("stripe_cardholder_id")
+  last4               String
+  brand               String            @default("visa")
+  expMonth            Int               @map("exp_month")
+  expYear             Int               @map("exp_year")
+  status              VirtualCardStatus @default(ACTIVE)
+  currency            String            @default("usd")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("virtual_cards")
+}
+
+model FundingOrder {
+  id                       String             @id @default(uuid())
+  userId                   String             @map("user_id")
+  amountGmd                Float              @map("amount_gmd")
+  feeGmd                   Float              @map("fee_gmd")
+  totalGmd                 Float              @map("total_gmd")
+  usdEstimate              Float              @map("usd_estimate")
+  status                   FundingOrderStatus @default(PENDING)
+  directPayOrderId         String?            @map("directpay_order_id")
+  directPayOrderPublicCode String?            @map("directpay_order_public_code")
+  directPayPaymentId       String?            @map("directpay_payment_id")
+  metadata                 Json?
+  paidAt                   DateTime?          @map("paid_at")
+  createdAt                DateTime           @default(now()) @map("created_at")
+  updatedAt                DateTime           @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@map("funding_orders")
+}
+
+model VPayWallet {
+  id          String   @id @default(uuid())
+  userId      String   @unique @map("user_id")
+  phoneNumber String   @unique @map("phone_number")
+  balanceGmd  Float    @default(0) @map("balance_gmd")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions WalletTransaction[]
+
+  @@map("vpay_wallets")
+}
+
+model WalletTransaction {
+  id               String                @id @default(uuid())
+  walletId         String                @map("wallet_id")
+  type             WalletTransactionType
+  amountGmd        Float                 @map("amount_gmd")
+  balanceBeforeGmd Float                 @map("balance_before_gmd")
+  balanceAfterGmd  Float                 @map("balance_after_gmd")
+  usdEstimate      Float?                @map("usd_estimate")
+  exchangeRate     Float?                @map("exchange_rate")
+  referenceType    String?               @map("reference_type")
+  referenceId      String?               @map("reference_id")
+  description      String?
+  metadata         Json?
+  createdAt        DateTime              @default(now()) @map("created_at")
+
+  wallet            VPayWallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  cardFundTransaction CardFundTransaction?
+
+  @@index([walletId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("wallet_transactions")
+}
+
+model CardFundTransaction {
+  id                     String                    @id @default(uuid())
+  userId                 String                    @map("user_id")
+  walletTransactionId    String                    @unique @map("wallet_transaction_id")
+  amountGmd              Float                     @map("amount_gmd")
+  amountUsd              Float                     @map("amount_usd")
+  exchangeRate           Float                     @map("exchange_rate")
+  stripeBalanceBeforeUsd Float                     @map("stripe_balance_before_usd")
+  stripeBalanceAfterUsd  Float                     @map("stripe_balance_after_usd")
+  gmdEstimateBefore      Float                     @map("gmd_estimate_before")
+  gmdEstimateAfter       Float                     @map("gmd_estimate_after")
+  stripeCredited         Boolean                   @default(false) @map("stripe_credited")
+  stripeTransferId       String?                   @map("stripe_transfer_id")
+  status                 CardFundTransactionStatus @default(PENDING)
+  createdAt              DateTime                  @default(now()) @map("created_at")
+
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  walletTransaction WalletTransaction @relation(fields: [walletTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("card_fund_transactions")
+}
+
+model OtpCode {
+  id        Int      @id @default(autoincrement())
+  email     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([email])
+  @@map("otp_codes")
+}
