@@ -99,6 +99,7 @@ export type VirtualCardSummary = {
   balanceGmdEstimate: number;
   balanceSource: 'stripe' | 'simulated' | 'unavailable';
   currency: string;
+  cardholderName: string;
 };
 
 export type CardsResponse = {

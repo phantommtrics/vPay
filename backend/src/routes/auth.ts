@@ -14,7 +14,7 @@ import {
   toPublicUser,
   updateUserProfile,
 } from '../db.js';
-import { sendOtpEmail } from '../email.js';
+import { sendOtpEmail, sendWelcomeEmail } from '../email.js';
 import { log } from '../logger.js';
 import { formatZodError } from '../zod-utils.js';
 import { WalletPhoneConflictError } from '../wallet/service.js';
@@ -78,9 +78,24 @@ export async function handleSendOtp(req: Request, res: Response): Promise<void> 
   log('OTP requested', { email });
   await saveOtp(email, code, expiresAt);
 
+  const isNewUser = !(await findUserByEmail(email));
+
   try {
     await sendOtpEmail(email, code);
     log('OTP sent', { email });
+
+    if (isNewUser) {
+      try {
+        await sendWelcomeEmail(email);
+        log('Welcome email sent', { email });
+      } catch (err) {
+        log('Welcome email failed', {
+          email,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+    }
+
     res.json({ ok: true, message: 'Verification code sent' });
   } catch (err) {
     log('OTP send failed', { email, error: err instanceof Error ? err.message : 'unknown' });

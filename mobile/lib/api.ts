@@ -274,6 +274,8 @@ export function issuingElementsUrl(params?: {
   publishableKey?: string | null;
   stripeAccount?: string | null;
   layout?: 'full' | 'card' | 'number' | 'cvc' | 'copy';
+  holder?: string | null;
+  expiry?: string | null;
 }): string {
   const search = new URLSearchParams();
   if (params?.publishableKey) {
@@ -284,6 +286,12 @@ export function issuingElementsUrl(params?: {
   }
   if (params?.layout) {
     search.set('layout', params.layout);
+  }
+  if (params?.holder) {
+    search.set('holder', params.holder);
+  }
+  if (params?.expiry) {
+    search.set('expiry', params.expiry);
   }
   const query = search.toString();
   return `${API_URL}/issuing-elements${query ? `?${query}` : ''}`;

@@ -25,6 +25,7 @@ import Animated, { FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OtpInput, type OtpInputRef } from '@/components/OtpInput';
+import { VPayWordmark } from '@/components/VPayWordmark';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendOtp } from '@/lib/api';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -152,16 +153,8 @@ export default function OnboardingScreen() {
         )}
 
         <Animated.View entering={FadeInDown.duration(500)} style={styles.heroContent}>
-          <View style={styles.logoRow}>
-            <LinearGradient
-              colors={[colors.emerald400, colors.emerald600]}
-              style={styles.logo}>
-              <Text style={styles.logoText}>v</Text>
-            </LinearGradient>
-            <View>
-              <Text style={styles.brandName}>vPay</Text>
-              <Text style={styles.brandTagline}>Virtual cards, simplified</Text>
-            </View>
+          <View style={styles.wordmarkWrap}>
+            <VPayWordmark variant="dark" width={200} height={66} />
           </View>
 
           <StepIndicator step={step} />
@@ -310,7 +303,15 @@ export default function OnboardingScreen() {
           </Pressable>
 
           <Text style={styles.legal}>
-            By continuing, you agree to vPay&apos;s Terms of Service and Privacy Policy.
+            By continuing, you agree to vPay&apos;s{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/terms')}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.legalLink} onPress={() => router.push('/privacy')}>
+              Privacy Policy
+            </Text>
+            .
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -421,35 +422,8 @@ const styles = StyleSheet.create({
   heroContent: {
     gap: 24,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  logo: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.white,
-    fontFamily: 'Inter_700Bold',
-  },
-  brandName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.white,
-    fontFamily: 'Inter_700Bold',
-  },
-  brandTagline: {
-    fontSize: 13,
-    color: colors.emerald200,
-    marginTop: 2,
-    fontFamily: 'Inter_400Regular',
+  wordmarkWrap: {
+    alignSelf: 'flex-start',
   },
   steps: {
     flexDirection: 'row',
@@ -673,5 +647,10 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textAlign: 'center',
     fontFamily: 'Inter_400Regular',
+  },
+  legalLink: {
+    color: colors.emerald600,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
   },
 });

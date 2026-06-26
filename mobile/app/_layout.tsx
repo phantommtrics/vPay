@@ -57,6 +57,14 @@ export default function RootLayout() {
               name="security"
               options={{ presentation: 'card', animation: 'slide_from_right' }}
             />
+            <Stack.Screen
+              name="terms"
+              options={{ presentation: 'card', animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+              name="privacy"
+              options={{ presentation: 'card', animation: 'slide_from_right' }}
+            />
           </Stack>
         </AppLockGate>
       </AppLockProvider>

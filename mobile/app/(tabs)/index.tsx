@@ -20,10 +20,10 @@ import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { TransactionRow } from '@/components/TransactionRow';
 import { VirtualCard } from '@/components/VirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCardActivity } from '@/hooks/useCardActivity';
 import { useCards } from '@/hooks/useCards';
 import { getUserDisplayName, getUserInitials, hasDisplayName } from '@/lib/api';
 import { colors, radius, spacing } from '@/constants/theme';
-import { recentTransactions } from '@/lib/data';
 import { sanitizeUserFacingText } from '@/lib/user-facing-text';
 
 export default function HomeScreen() {
@@ -39,22 +39,29 @@ export default function HomeScreen() {
     error: cardsError,
     refresh,
   } = useCards(Boolean(user?.kycComplete));
+  const {
+    transactions: cardActivity,
+    loading: activityLoading,
+    refreshing: activityRefreshing,
+    error: activityError,
+    refresh: refreshActivity,
+  } = useCardActivity(Boolean(user?.kycComplete));
   const [refreshingUser, setRefreshingUser] = useState(false);
 
-  const refreshing = refreshingUser || cardsRefreshing;
+  const refreshing = refreshingUser || cardsRefreshing || activityRefreshing;
 
   const onRefresh = useCallback(async () => {
     setRefreshingUser(true);
     try {
       const tasks: Promise<void>[] = [refreshUser()];
       if (user?.kycComplete) {
-        tasks.push(refresh());
+        tasks.push(refresh(), refreshActivity());
       }
       await Promise.all(tasks);
     } finally {
       setRefreshingUser(false);
     }
-  }, [refreshUser, refresh, user?.kycComplete]);
+  }, [refreshUser, refresh, refreshActivity, user?.kycComplete]);
 
   if (!user) return null;
 
@@ -197,9 +204,19 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.list}>
-          {recentTransactions.map((tx) => (
-            <TransactionRow key={tx.id} transaction={tx} />
-          ))}
+          {activityLoading ? (
+            <ActivityIndicator color={colors.emerald600} style={styles.activityLoader} />
+          ) : activityError ? (
+            <Text style={styles.activityEmpty}>{activityError}</Text>
+          ) : cardActivity.length === 0 ? (
+            <Text style={styles.activityEmpty}>
+              {user.kycComplete
+                ? 'No card activity yet. Fund your card from the Cards tab.'
+                : 'Complete verification to see card activity.'}
+            </Text>
+          ) : (
+            cardActivity.map((tx) => <TransactionRow key={tx.id} transaction={tx} />)
+          )}
         </View>
       </View>
     </PullToRefreshScrollView>
@@ -415,5 +432,16 @@ const styles = StyleSheet.create({
   },
   list: {
     gap: 16,
+  },
+  activityLoader: {
+    marginVertical: 16,
+  },
+  activityEmpty: {
+    textAlign: 'center',
+    color: colors.gray500,
+    fontSize: 14,
+    lineHeight: 20,
+    paddingVertical: 16,
+    fontFamily: 'Inter_400Regular',
   },
 });

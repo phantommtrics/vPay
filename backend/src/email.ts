@@ -49,3 +49,94 @@ export async function sendOtpEmail(email: string, code: string): Promise<void> {
     throw new Error(error.message);
   }
 }
+
+export async function sendWelcomeEmail(email: string): Promise<void> {
+  if (!resend) {
+    console.log(`[dev] Welcome email for ${email}`);
+    return;
+  }
+
+  const { error } = await resend.emails.send({
+    from: formatFromAddress(),
+    to: email,
+    subject: `Welcome to ${appName} — get your virtual card ready`,
+    html: `
+      <div style="font-family: Inter, -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #111827;">
+        <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #047857; text-transform: uppercase; letter-spacing: 0.04em;">
+          Welcome to ${appName}
+        </p>
+        <h1 style="font-size: 26px; line-height: 1.3; margin: 0 0 16px;">
+          Your virtual card is a few steps away
+        </h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 28px;">
+          ${appName} gives you a virtual card you can fund from local wallets like Wave and APS,
+          then use for online purchases and international payments — right from your phone.
+        </p>
+
+        <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 16px; padding: 24px; margin-bottom: 28px;">
+          <p style="margin: 0 0 20px; font-size: 15px; font-weight: 600; color: #111827;">
+            Complete these three steps to start spending:
+          </p>
+          <table role="presentation" cellpadding="0" cellspacing="0" style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="vertical-align: top; width: 36px; padding-bottom: 18px;">
+                <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 14px; font-weight: 700; text-align: center;">1</span>
+              </td>
+              <td style="vertical-align: top; padding-bottom: 18px;">
+                <p style="margin: 0 0 4px; font-size: 15px; font-weight: 600;">Verify your identity</p>
+                <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6b7280;">
+                  Submit your details in Profile to complete KYC and unlock card features.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; width: 36px; padding-bottom: 18px;">
+                <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 14px; font-weight: 700; text-align: center;">2</span>
+              </td>
+              <td style="vertical-align: top; padding-bottom: 18px;">
+                <p style="margin: 0 0 4px; font-size: 15px; font-weight: 600;">Fund your ${appName} wallet</p>
+                <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6b7280;">
+                  Top up from Wave or APS Wallet on the Fund tab — your balance stays ready when you need it.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="vertical-align: top; width: 36px;">
+                <span style="display: inline-block; width: 28px; height: 28px; line-height: 28px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 14px; font-weight: 700; text-align: center;">3</span>
+              </td>
+              <td style="vertical-align: top;">
+                <p style="margin: 0 0 4px; font-size: 15px; font-weight: 600;">Load your virtual card</p>
+                <p style="margin: 0; font-size: 14px; line-height: 1.5; color: #6b7280;">
+                  Move funds from your wallet to your card and start paying online securely.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        <p style="margin: 0 0 24px; font-size: 16px; line-height: 1.6; color: #4b5563;">
+          Open the ${appName} app, enter the verification code we just sent, and finish setup in minutes.
+        </p>
+
+        <p style="margin: 0 0 32px;">
+          <span style="display: inline-block; background: #047857; color: #ffffff; font-size: 15px; font-weight: 600; padding: 14px 24px; border-radius: 12px;">
+            Open ${appName} and get started
+          </span>
+        </p>
+
+        <p style="color: #9ca3af; font-size: 13px; line-height: 1.5; margin: 0;">
+          You received this because you started signing up for ${appName}.
+          If this wasn't you, you can ignore this email.
+        </p>
+      </div>
+    `,
+  });
+
+  if (error) {
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[dev] Welcome email for ${email} (Resend: ${error.message})`);
+      return;
+    }
+    throw new Error(error.message);
+  }
+}

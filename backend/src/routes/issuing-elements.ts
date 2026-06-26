@@ -2,6 +2,16 @@ import type { Request, Response } from 'express';
 
 import { getStripePublishableKey } from '../stripe/client.js';
 
+function vpayWordmarkSvg(width = 96, height = 31): string {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 220 72" role="img" aria-label="VPay Africa" style="display:block;background:transparent;">
+  <text font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="46" font-weight="700" letter-spacing="-1.5">
+    <tspan x="4" y="46" fill="#4A80E8">V</tspan><tspan fill="#FFFFFF">Pay</tspan>
+  </text>
+  <text x="5" y="64" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="500" letter-spacing="5.5" fill="#8A95A8">AFRICA</text>
+  <rect x="4" y="68" width="52" height="2" rx="1" fill="#E8A020"/>
+</svg>`;
+}
+
 export function handleIssuingElementsPage(req: Request, res: Response): void {
   const publishableKey = getStripePublishableKey() ?? '';
   const layout = typeof req.query.layout === 'string' ? req.query.layout : 'full';
@@ -30,10 +40,16 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
       flex-direction: column;
       justify-content: center;
       padding: ${isCardLayout ? '0' : '12px'};
-      gap: ${isCardLayout ? '12px' : '16px'};
+      gap: ${isCardLayout ? '10px' : '16px'};
     }
     #root.card-layout {
       justify-content: flex-end;
+      gap: 8px;
+    }
+    .vpay-wordmark {
+      flex-shrink: 0;
+      line-height: 0;
+      background: transparent;
     }
     .label {
       font-family: Inter, system-ui, sans-serif;
@@ -41,39 +57,94 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
       text-transform: uppercase;
       letter-spacing: 0.08em;
       color: rgba(167, 243, 208, 0.85);
-      margin-bottom: 6px;
+      margin-bottom: 2px;
     }
-    .number-row { min-height: ${isCardLayout ? '28px' : '32px'}; width: 100%; }
-    .cvc-row { min-height: ${isCardLayout ? '22px' : '28px'}; min-width: ${isCardLayout ? '40px' : '72px'}; }
-    .copy-row { min-height: ${isCardLayout ? '28px' : '36px'}; min-width: ${isCardLayout ? '72px' : '120px'}; }
+    .number-row {
+      min-height: ${isCardLayout ? '28px' : '32px'};
+      width: 100%;
+      padding-right: ${isCardLayout ? '36px' : '0'};
+    }
+    .cvc-row { min-height: ${isCardLayout ? '20px' : '28px'}; }
+    .copy-row { min-height: ${isCardLayout ? '20px' : '36px'}; }
     .details-row {
       display: flex;
       flex-direction: row;
       align-items: flex-end;
-      justify-content: flex-end;
-      gap: ${isCardLayout ? '12px' : '16px'};
+      justify-content: space-between;
+      gap: ${isCardLayout ? '8px' : '16px'};
+      width: 100%;
+      min-width: 0;
     }
-    .card-layout .details-row {
-      padding-left: 96px;
+    .holder-col {
+      flex: 1 1 0;
+      min-width: 0;
+      overflow: hidden;
+    }
+    .holder-value,
+    .expiry-value {
+      color: #fff;
+      font-family: Inter, system-ui, sans-serif;
+      font-size: clamp(10px, 3.2vw, 13px);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: 18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .expiry-value {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: clamp(11px, 3.4vw, 14px);
+      letter-spacing: 0.04em;
+    }
+    .expiry-col,
+    .cvc-col,
+    .copy-col {
+      flex: 0 0 auto;
+    }
+    .cvc-col {
+      min-width: 36px;
+    }
+    .copy-col {
+      max-width: 52px;
+      overflow: hidden;
     }
     .StripeElement,
     .StripeElement iframe {
       width: 100% !important;
-      min-height: ${isCardLayout ? '22px' : '28px'} !important;
+      min-height: ${isCardLayout ? '20px' : '28px'} !important;
       opacity: 1 !important;
     }
   </style>
 </head>
 <body>
   <div id="root" class="${isCardLayout ? 'card-layout' : ''}">
+    ${isCardLayout ? `<div class="vpay-wordmark">${vpayWordmarkSvg()}</div>` : ''}
     ${isCardLayout ? '' : '<div><div class="label">Card number</div>'}
     <div id="number-mount" class="number-row"></div>
     ${isCardLayout ? '' : '</div>'}
     <div class="details-row">
-      ${isCardLayout ? '' : '<div><div class="label">CVV</div>'}
-      <div id="cvc-mount" class="cvc-row"></div>
-      ${isCardLayout ? '' : '</div>'}
-      <div id="copy-mount" class="copy-row"></div>
+      ${
+        isCardLayout
+          ? `<div class="holder-col">
+        <div class="label">Cardholder</div>
+        <div class="holder-value" id="holder-display"></div>
+      </div>
+      <div class="expiry-col">
+        <div class="label">Valid Thru</div>
+        <div class="expiry-value" id="expiry-display"></div>
+      </div>
+      <div class="cvc-col">
+        <div class="label">CVV</div>
+        <div id="cvc-mount" class="cvc-row"></div>
+      </div>
+      <div class="copy-col">
+        <div id="copy-mount" class="copy-row"></div>
+      </div>`
+          : `<div><div class="label">CVV</div>
+      <div id="cvc-mount" class="cvc-row"></div></div>
+      <div id="copy-mount" class="copy-row"></div>`
+      }
     </div>
   </div>
   <script>
@@ -81,6 +152,15 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
     const publishableKey = params.get('pk') || ${JSON.stringify(publishableKey)};
     const stripeAccount = params.get('account');
     const isCardLayout = ${JSON.stringify(isCardLayout)};
+    const holderName = params.get('holder') || '';
+    const expiryLabel = params.get('expiry') || '';
+
+    if (isCardLayout) {
+      const holderEl = document.getElementById('holder-display');
+      const expiryEl = document.getElementById('expiry-display');
+      if (holderEl) holderEl.textContent = holderName;
+      if (expiryEl) expiryEl.textContent = expiryLabel;
+    }
 
     const stripeOptions = { betas: ['issuing_elements_2'] };
     if (stripeAccount) stripeOptions.stripeAccount = stripeAccount;
@@ -113,8 +193,8 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
         ? {
             color: '#ffffff',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-            fontSize: '17px',
-            letterSpacing: '0.12em',
+            fontSize: 'clamp(13px, 4.2vw, 17px)',
+            letterSpacing: '0.08em',
             lineHeight: '28px',
           }
         : {
@@ -129,9 +209,9 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
         ? {
             color: '#ffffff',
             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-            fontSize: '14px',
-            letterSpacing: '0.06em',
-            lineHeight: '22px',
+            fontSize: 'clamp(11px, 3.4vw, 14px)',
+            letterSpacing: '0.04em',
+            lineHeight: '20px',
           }
         : {
             color: '#ffffff',

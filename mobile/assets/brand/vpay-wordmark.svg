@@ -1,0 +1,8 @@
+<svg width="220" height="72" viewBox="0 0 220 72" role="img" xmlns="http://www.w3.org/2000/svg">
+  <title>VPay Africa Wordmark</title>
+  <text font-family="sans-serif" font-size="46" font-weight="700" letter-spacing="-1.5">
+    <tspan x="4" y="46" fill="#1A4DB8">V</tspan><tspan fill="#0A1628">Pay</tspan>
+  </text>
+  <text x="5" y="64" font-family="sans-serif" font-size="12" font-weight="500" letter-spacing="5.5" fill="#6B7A92">AFRICA</text>
+  <rect x="4" y="68" width="52" height="2" rx="1" fill="#E8A020"/>
+</svg>

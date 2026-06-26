@@ -16,6 +16,7 @@ import {
   PhoneAlreadyInUseError,
 } from './phone.js';
 import { getFinancialAccountBalanceUsd } from './stripe/issuing.js';
+import { getCardholderName } from './stripe/mappers.js';
 import { resolveCardBalanceUsd } from './stripe/card-balance.js';
 import { ensureWalletForUser } from './wallet/service.js';
 
@@ -62,6 +63,7 @@ export type PublicVirtualCard = {
   balanceGmdEstimate: number;
   balanceSource: 'stripe' | 'simulated' | 'unavailable';
   currency: string;
+  cardholderName: string;
 };
 
 function toKycStatus(status: KycStatus): PublicUser['kycStatus'] {
@@ -129,6 +131,13 @@ export async function toPublicVirtualCard(
   );
   const balanceGmdEstimate = balanceUsd * exchangeRate;
 
+  let cardholderName = '';
+  try {
+    cardholderName = getCardholderName(user);
+  } catch {
+    cardholderName = '';
+  }
+
   return {
     id: card.id,
     stripeCardId: card.stripeCardId,
@@ -142,6 +151,7 @@ export async function toPublicVirtualCard(
     balanceGmdEstimate,
     balanceSource,
     currency: card.currency,
+    cardholderName,
   };
 }
 

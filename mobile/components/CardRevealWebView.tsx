@@ -17,6 +17,8 @@ type CardRevealWebViewProps = {
   card: VirtualCardSummary;
   publishableKey: string | null;
   stripeConnectedAccountId: string | null;
+  holderName?: string;
+  expiry?: string;
   style?: ViewStyle;
 };
 
@@ -25,6 +27,8 @@ export function CardRevealWebView({
   card,
   publishableKey,
   stripeConnectedAccountId,
+  holderName,
+  expiry,
   style,
 }: CardRevealWebViewProps) {
   const webViewRef = useRef<WebView>(null);
@@ -109,6 +113,8 @@ export function CardRevealWebView({
             publishableKey,
             stripeAccount: stripeConnectedAccountId,
             layout: 'card',
+            holder: holderName,
+            expiry,
           }),
         }}
         onMessage={handleMessage}
@@ -148,15 +154,17 @@ export function CardRevealWebView({
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
-    minHeight: 76,
-    overflow: 'visible',
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
   },
   webviewContainer: {
     backgroundColor: 'transparent',
   },
   webview: {
     flex: 1,
+    width: '100%',
+    height: '100%',
     backgroundColor: 'transparent',
   },
   loadingOverlay: {

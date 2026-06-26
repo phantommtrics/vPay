@@ -5,14 +5,17 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock,
+  FileText,
   HelpCircle,
   LogOut,
+  Shield,
   ShieldCheck,
   User,
 } from 'lucide-react-native';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { VPayWordmark } from '@/components/VPayWordmark';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserDisplayName, getUserInitials } from '@/lib/api';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -129,6 +132,20 @@ export default function ProfileScreen() {
           label="Help & Support"
           iconBg={colors.purple50}
           iconColor={colors.purple600}
+        />
+        <SettingsRow
+          icon={FileText}
+          label="Terms of Service"
+          iconBg={colors.gray100}
+          iconColor={colors.gray600}
+          onPress={() => router.push('/terms')}
+        />
+        <SettingsRow
+          icon={Shield}
+          label="Privacy Policy"
+          iconBg={colors.blue50}
+          iconColor={colors.blue600}
+          onPress={() => router.push('/privacy')}
           isLast
         />
       </View>
@@ -137,6 +154,24 @@ export default function ProfileScreen() {
         <LogOut size={18} color={colors.red500} />
         <Text style={styles.logoutText}>Log Out</Text>
       </Pressable>
+
+      <View style={styles.partnershipSection}>
+        <Text style={styles.partnershipLabel}>Powered by</Text>
+        <View style={styles.partnerLogos}>
+          <VPayWordmark variant="light" width={108} height={35} />
+          <View style={styles.partnerDivider} />
+          <Image
+            source={require('@/assets/images/directPay.png')}
+            style={styles.directPayLogo}
+            resizeMode="contain"
+            accessibilityLabel="Direct Pay"
+          />
+        </View>
+        <Text style={styles.partnershipText}>
+          vPay partners with Direct Pay to bring you secure wallet top-ups from local mobile money
+          services, including Wave and APS Wallet.
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -349,5 +384,43 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.red500,
     fontFamily: 'Inter_500Medium',
+  },
+  partnershipSection: {
+    alignItems: 'center',
+    gap: 14,
+    paddingTop: 8,
+    paddingHorizontal: 8,
+  },
+  partnershipLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.gray400,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  partnerLogos: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    flexWrap: 'wrap',
+  },
+  partnerDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: colors.gray200,
+  },
+  directPayLogo: {
+    width: 120,
+    height: 40,
+  },
+  partnershipText: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.gray500,
+    textAlign: 'center',
+    fontFamily: 'Inter_400Regular',
+    maxWidth: 300,
   },
 });
