@@ -2,7 +2,7 @@
   "expo": {
     "name": "vPay",
     "slug": "vpay",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vpay",
@@ -15,9 +15,11 @@
           "NSAllowsLocalNetworking": true
         }
       },
-      "bundleIdentifier": "com.afanglamin.vpay"
+      "bundleIdentifier": "gm.phantommetrics.vpay"
     },
     "android": {
+      "package": "gm.phantommetrics.vpay",
+      "versionCode": 2,
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
@@ -25,7 +27,7 @@
       ],
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#ecfdf5",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -38,6 +40,9 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withAndroidUploadSigning",
+      "./plugins/withAndroidProduction",
+      "./plugins/withIosFmtXcode26Fix",
       "expo-router",
       [
         "expo-splash-screen",

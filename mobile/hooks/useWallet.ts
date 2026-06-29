@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
+import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { ApiError, getWallet } from '@/lib/api';
 import type { WalletSummary } from '@/lib/types';
 
@@ -44,9 +45,7 @@ export function useWallet(enabled = true): UseWalletResult {
     }
   }, [enabled]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefreshOnFocus(refresh);
 
   return { wallet, loading, refreshing, error, refresh };
 }

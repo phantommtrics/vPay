@@ -12,6 +12,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -133,13 +134,23 @@ export default function OnboardingScreen() {
     setTimeout(() => emailRef.current?.focus(), 300);
   };
 
+  const dismissKeyboard = useCallback(() => {
+    emailRef.current?.blur();
+    otpRef.current?.blur();
+    Keyboard.dismiss();
+  }, []);
+
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={[colors.emerald950, colors.emerald800, colors.teal900]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
+      <Pressable
+        onPress={dismissKeyboard}
         style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
+        <LinearGradient
+          colors={[colors.emerald950, colors.emerald800, colors.teal900]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.orbLarge} />
         <View style={styles.orbSmall} />
 
@@ -159,7 +170,7 @@ export default function OnboardingScreen() {
 
           <StepIndicator step={step} />
         </Animated.View>
-      </LinearGradient>
+      </Pressable>
 
       <KeyboardAvoidingView
         style={styles.sheetWrap}
@@ -169,8 +180,10 @@ export default function OnboardingScreen() {
             styles.sheet,
             { paddingBottom: insets.bottom + spacing.xl },
           ]}
-          keyboardShouldPersistTaps="always"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}>
+          <Pressable onPress={dismissKeyboard} style={styles.sheetPressable}>
           {step === 'email' ? (
             <Animated.View
               key="email-step"
@@ -210,7 +223,10 @@ export default function OnboardingScreen() {
                       setError('');
                     }}
                     onFocus={() => setEmailFocused(true)}
-                    onBlur={() => setEmailFocused(false)}
+                    onBlur={() => {
+                      setEmailFocused(false);
+                      Keyboard.dismiss();
+                    }}
                     placeholder="you@example.com"
                     placeholderTextColor={colors.gray400}
                     keyboardType="email-address"
@@ -302,6 +318,8 @@ export default function OnboardingScreen() {
             )}
           </Pressable>
 
+          <View style={styles.legalSpacer} />
+
           <Text style={styles.legal}>
             By continuing, you agree to vPay&apos;s{' '}
             <Text style={styles.legalLink} onPress={() => router.push('/terms')}>
@@ -313,6 +331,7 @@ export default function OnboardingScreen() {
             </Text>
             .
           </Text>
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -477,6 +496,14 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: -24,
   },
+  sheetPressable: {
+    flex: 1,
+    gap: 20,
+  },
+  legalSpacer: {
+    flex: 1,
+    minHeight: spacing.md,
+  },
   sheet: {
     flexGrow: 1,
     backgroundColor: colors.white,
@@ -484,7 +511,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     paddingHorizontal: spacing.lg,
     paddingTop: 28,
-    gap: 20,
     shadowColor: colors.gray900,
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.08,

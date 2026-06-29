@@ -50,7 +50,7 @@ async function request<T>(
     });
   } catch {
     throw new ApiError(
-      'Unable to reach the server. Check that the backend is running and you are on the same Wi‑Fi.',
+      'Unable to reach the server. Check that you have an active internet connection',
       0,
     );
   }
@@ -121,7 +121,7 @@ export async function uploadKycDocument(
     });
   } catch {
     throw new ApiError(
-      'Unable to reach the server. Check that the backend is running and you are on the same Wi‑Fi.',
+      'Unable to reach the server. Check that you have an active internet connection',
       0,
     );
   }

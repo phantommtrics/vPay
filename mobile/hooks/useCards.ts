@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
+import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { fetchCards, updateCardStatus } from '@/lib/api';
 import type { CardsResponse, VirtualCardSummary } from '@/lib/types';
 
@@ -57,9 +58,7 @@ export function useCards(enabled = true): UseCardsResult {
     }
   }, [enabled]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefreshOnFocus(refresh);
 
   const freezeCard = useCallback(async (cardId: string) => {
     setUpdatingCardId(cardId);

@@ -39,7 +39,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refreshUser().finally(() => setIsLoading(false));
+    let cancelled = false;
+
+    async function bootstrap() {
+      try {
+        await refreshUser();
+      } catch (error) {
+        console.warn('Failed to restore session', error);
+        if (!cancelled) {
+          setUser(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    bootstrap();
+    return () => {
+      cancelled = true;
+    };
   }, [refreshUser]);
 
   const signIn = useCallback(async (email: string, code: string) => {

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
+import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { getCardFundTransactions } from '@/lib/api';
 import { cardFundTxToRecentActivity } from '@/lib/card-activity';
 import type { Transaction } from '@/lib/data';
@@ -46,9 +47,7 @@ export function useCardActivity(enabled = true, limit = 5): UseCardActivityResul
     }
   }, [enabled, limit]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
+  useRefreshOnFocus(refresh);
 
   return { transactions, loading, refreshing, error, refresh };
 }

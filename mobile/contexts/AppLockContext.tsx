@@ -146,49 +146,56 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     let cancelled = false;
 
     async function init() {
-      const [method, enabled] = await Promise.all([
-        resolveBiometricMethod(),
-        getAppLockEnabled(),
-      ]);
+      try {
+        const [method, enabled] = await Promise.all([
+          resolveBiometricMethod(),
+          getAppLockEnabled(),
+        ]);
 
-      if (cancelled) return;
+        if (cancelled) return;
 
-      setBiometricMethod(method);
-      setBiometricsReady(true);
-      setAppLockEnabledState(enabled);
+        setBiometricMethod(method);
+        setBiometricsReady(true);
+        setAppLockEnabledState(enabled);
 
-      if (!user || authLoading) {
-        if (!user) {
-          sessionLockInitialized.current = false;
+        if (!user || authLoading) {
+          if (!user) {
+            sessionLockInitialized.current = false;
+          }
+          setIsUnlocked(true);
+          setIsChecking(false);
+          return;
         }
-        setIsUnlocked(true);
-        setIsChecking(false);
-        return;
-      }
 
-      if (!enabled) {
-        setIsUnlocked(true);
-        setIsChecking(false);
+        if (!enabled) {
+          setIsUnlocked(true);
+          setIsChecking(false);
+          sessionLockInitialized.current = true;
+          return;
+        }
+
+        if (sessionLockInitialized.current) {
+          setIsChecking(false);
+          return;
+        }
+
         sessionLockInitialized.current = true;
-        return;
-      }
 
-      // Only evaluate lock on first session restore / login — not on profile updates.
-      if (sessionLockInitialized.current) {
+        if (consumeSkipNextAppLock()) {
+          setIsUnlocked(true);
+          setIsChecking(false);
+          return;
+        }
+
+        setIsUnlocked(false);
         setIsChecking(false);
-        return;
+      } catch (error) {
+        console.warn('App lock init failed', error);
+        if (!cancelled) {
+          setIsUnlocked(true);
+          setIsChecking(false);
+        }
       }
-
-      sessionLockInitialized.current = true;
-
-      if (consumeSkipNextAppLock()) {
-        setIsUnlocked(true);
-        setIsChecking(false);
-        return;
-      }
-
-      setIsUnlocked(false);
-      setIsChecking(false);
     }
 
     init();

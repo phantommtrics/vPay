@@ -1,5 +1,6 @@
+import { useFocusEffect } from '@react-navigation/native';
 import { Filter, Search } from 'lucide-react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -148,6 +149,7 @@ export default function TransactionsScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
   const loadingMoreRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   const applyWalletPage = useCallback((transactions: WalletTransactionSummary[], nextCursor: string | null, replace: boolean) => {
     setWalletTxs((current) => (replace ? transactions : appendUnique(current, transactions)));
@@ -170,9 +172,14 @@ export default function TransactionsScreen() {
     applyCardPage(cardData.transactions, cardData.nextCursor, true);
   }, [applyCardPage, applyWalletPage]);
 
-  const loadInitial = useCallback(async () => {
+  const refreshTransactions = useCallback(async () => {
     if (!user?.kycComplete) return;
-    setLoading(true);
+
+    if (hasLoadedRef.current) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError('');
     try {
       await fetchFirstPage();
@@ -180,21 +187,18 @@ export default function TransactionsScreen() {
       setError(e instanceof Error ? e.message : 'Failed to load transactions');
     } finally {
       setLoading(false);
+      setRefreshing(false);
+      hasLoadedRef.current = true;
     }
   }, [fetchFirstPage, user?.kycComplete]);
 
-  const onRefresh = useCallback(async () => {
-    if (!user?.kycComplete) return;
-    setRefreshing(true);
-    setError('');
-    try {
-      await fetchFirstPage();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load transactions');
-    } finally {
-      setRefreshing(false);
-    }
-  }, [fetchFirstPage, user?.kycComplete]);
+  useFocusEffect(
+    useCallback(() => {
+      void refreshTransactions();
+    }, [refreshTransactions]),
+  );
+
+  const onRefresh = refreshTransactions;
 
   const loadMore = useCallback(async () => {
     if (!user?.kycComplete || loading || refreshing || loadingMoreRef.current) return;
@@ -249,10 +253,6 @@ export default function TransactionsScreen() {
     walletCursor,
     walletHasMore,
   ]);
-
-  useEffect(() => {
-    void loadInitial();
-  }, [loadInitial]);
 
   const allEntries = useMemo(() => {
     const items = [

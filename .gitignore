@@ -18,6 +18,12 @@ mobile/*.mobileprovision
 mobile/ios/
 mobile/android/
 
+# Android Play upload signing (never commit secrets)
+mobile/android-signing/keystore.properties
+mobile/android-signing/*.keystore
+mobile/android-signing/*.jks
+mobile/android-signing/upload_certificate.pem
+
 # Metro
 mobile/.metro-health-check*
 

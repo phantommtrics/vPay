@@ -31,6 +31,7 @@ type OtpInputProps = {
 
 export type OtpInputRef = {
   focus: () => void;
+  blur: () => void;
 };
 
 export const OtpInput = forwardRef<OtpInputRef, OtpInputProps>(function OtpInput(
@@ -58,6 +59,7 @@ export const OtpInput = forwardRef<OtpInputRef, OtpInputProps>(function OtpInput
 
   useImperativeHandle(ref, () => ({
     focus: focusInput,
+    blur: () => inputRef.current?.blur(),
   }));
 
   useEffect(() => {

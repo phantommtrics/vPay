@@ -6,7 +6,18 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "prebuild:android": "expo prebuild --platform android --clean",
+    "setup:play-upload-key": "bash scripts/setup-play-upload-key.sh",
+    "export:play-upload-cert": "bash scripts/setup-play-upload-key.sh export-only",
+    "install:expo-go:ios": "bash scripts/install-expo-go-ios.sh",
+    "generate:icons": "bash scripts/generate-icons.sh",
+    "android:release": "bash scripts/android-release.sh",
+    "android:apk": "bash scripts/android-apk.sh",
+    "android:play-release": "bash scripts/android-play-release.sh",
+    "build:android:preview": "eas build --platform android --profile preview",
+    "build:android": "eas build --platform android --profile production",
+    "submit:android": "eas submit --platform android --profile production"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.3.0",
@@ -39,6 +50,7 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "eas-cli": "^16.17.4",
     "typescript": "~5.8.3"
   },
   "private": true

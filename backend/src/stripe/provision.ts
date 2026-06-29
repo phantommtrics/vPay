@@ -1,6 +1,7 @@
 import { StripeProvisioningStatus, VirtualCardStatus, type User } from '@prisma/client';
 
 import { prisma } from '../db.js';
+import { sendCardReadyEmail } from '../email.js';
 import { log } from '../logger.js';
 import { isStripeConfigured, getIssuingCurrency } from './client.js';
 import { assertProvisioningReady } from './mappers.js';
@@ -135,6 +136,20 @@ export async function provisionUserCard(userId: string): Promise<void> {
     });
 
     log('Card provisioning completed', { userId, cardId: issued.stripeCardId });
+
+    try {
+      await sendCardReadyEmail(currentUser.email, {
+        firstName: currentUser.firstName,
+        last4: issued.last4,
+      });
+      log('Card ready email sent', { userId, email: currentUser.email });
+    } catch (err) {
+      log('Card ready email failed', {
+        userId,
+        email: currentUser.email,
+        error: err instanceof Error ? err.message : 'unknown',
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown provisioning error';
     log('Card provisioning failed', { userId, error: message });
