@@ -29,6 +29,7 @@ import { OtpInput, type OtpInputRef } from '@/components/OtpInput';
 import { VPayWordmark } from '@/components/VPayWordmark';
 import { useAuth } from '@/contexts/AuthContext';
 import { sendOtp } from '@/lib/api';
+import { collectDeviceInfo } from '@/lib/device-info';
 import { colors, radius, spacing } from '@/constants/theme';
 
 type Step = 'email' | 'otp';
@@ -49,6 +50,7 @@ export default function OnboardingScreen() {
   const [loading, setLoading] = useState(false);
   const [emailFocused, setEmailFocused] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [deviceLockNotice, setDeviceLockNotice] = useState(false);
 
   const trimmedEmail = email.trim().toLowerCase();
   const emailValid = EMAIL_RE.test(trimmedEmail);
@@ -69,8 +71,10 @@ export default function OnboardingScreen() {
     setLoading(true);
 
     try {
-      await sendOtp(trimmedEmail);
+      const deviceInfo = await collectDeviceInfo();
+      const result = await sendOtp(trimmedEmail, deviceInfo);
       setEmail(trimmedEmail);
+      setDeviceLockNotice(Boolean(result.accountDeviceLocked));
       setStep('otp');
       setOtp('');
       setResendCooldown(60);
@@ -116,7 +120,9 @@ export default function OnboardingScreen() {
     setLoading(true);
 
     try {
-      await sendOtp(email);
+      const deviceInfo = await collectDeviceInfo();
+      const result = await sendOtp(email, deviceInfo);
+      setDeviceLockNotice(Boolean(result.accountDeviceLocked));
       setResendCooldown(60);
       setOtp('');
       otpRef.current?.focus();
@@ -131,6 +137,7 @@ export default function OnboardingScreen() {
     setStep('email');
     setOtp('');
     setError('');
+    setDeviceLockNotice(false);
     setTimeout(() => emailRef.current?.focus(), 300);
   };
 
@@ -256,10 +263,20 @@ export default function OnboardingScreen() {
                 </View>
                 <Text style={styles.title}>Check your inbox</Text>
                 <Text style={styles.subtitle}>
-                  Enter the 6-digit code sent to{'\n'}
+                  Your email shows which device asked to sign in and your 6-digit code for{'\n'}
                   <Text style={styles.emailHighlight}>{email}</Text>
                 </Text>
               </View>
+
+              {deviceLockNotice ? (
+                <View style={styles.deviceLockNotice}>
+                  <Shield size={18} color={colors.emerald700} />
+                  <Text style={styles.deviceLockNoticeText}>
+                    This account is locked to one device only. Make sure the device name in your
+                    email matches this phone or tablet.
+                  </Text>
+                </View>
+              ) : null}
 
               <View style={styles.form}>
                 <OtpInput
@@ -627,6 +644,24 @@ const styles = StyleSheet.create({
   },
   resendMuted: {
     color: colors.gray400,
+  },
+  deviceLockNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: colors.emerald50,
+    borderRadius: radius.sm,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.emerald100,
+    marginBottom: 4,
+  },
+  deviceLockNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.emerald800,
+    fontFamily: 'Inter_400Regular',
   },
   errorBanner: {
     backgroundColor: colors.red50,

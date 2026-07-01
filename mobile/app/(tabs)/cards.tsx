@@ -25,7 +25,7 @@ import { VirtualCard } from '@/components/VirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCards } from '@/hooks/useCards';
 import { useWallet } from '@/hooks/useWallet';
-import { ApiError, fundCardFromWallet, getFundConfig } from '@/lib/api';
+import { ApiError, fundCardFromWallet, getFundConfig, payCardIssuance } from '@/lib/api';
 import { formatCardBalance, formatGmd } from '@/lib/currency';
 import { toFriendlyFundError } from '@/lib/fund-errors';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -35,6 +35,8 @@ export default function CardsScreen() {
   const { user } = useAuth();
   const {
     primaryCard,
+    provisioning,
+    issuance,
     stripePublishableKey,
     stripeConnectedAccountId,
     loading,
@@ -62,6 +64,8 @@ export default function CardsScreen() {
   const [fundError, setFundError] = useState('');
   const [fundSuccess, setFundSuccess] = useState<{ gmd: number; usd: number } | null>(null);
   const [showFundPanel, setShowFundPanel] = useState(false);
+  const [isReissuing, setIsReissuing] = useState(false);
+  const [reissueError, setReissueError] = useState('');
 
   const numFundAmount = parseFloat(fundAmount) || 0;
   const fundUsdEstimate =
@@ -74,6 +78,24 @@ export default function CardsScreen() {
   }, []);
 
   const isFrozen = primaryCard?.status === 'inactive';
+  const isExpired = Boolean(primaryCard?.expired);
+  const canReissue =
+    issuance.canReissue && issuance.required && provisioning.status !== 'pending';
+
+  const handleReissueCard = useCallback(async () => {
+    setReissueError('');
+    setIsReissuing(true);
+    try {
+      await payCardIssuance();
+      await refresh();
+    } catch (e) {
+      const message =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Could not reissue card';
+      setReissueError(message);
+    } finally {
+      setIsReissuing(false);
+    }
+  }, [refresh]);
 
   const handleFreezeToggle = async () => {
     if (!primaryCard) return;
@@ -154,7 +176,7 @@ export default function CardsScreen() {
           <Text style={styles.title}>Your Cards</Text>
           <Text style={styles.subtitle}>Manage your virtual cards</Text>
         </View>
-        {primaryCard ? (
+        {primaryCard && !isExpired ? (
           <Pressable
             style={styles.fundCardButton}
             onPress={() => {
@@ -193,7 +215,7 @@ export default function CardsScreen() {
         </Pressable>
       )}
 
-      {primaryCard && showFundPanel ? (
+      {primaryCard && !isExpired && showFundPanel ? (
         <View style={styles.fundSection}>
           <Text style={styles.fundSectionTitle}>Fund card</Text>
           <Text style={styles.fundSectionHint}>
@@ -285,7 +307,7 @@ export default function CardsScreen() {
           iconBg={isFrozen ? colors.blue100 : colors.gray100}
           iconColor={isFrozen ? colors.blue600 : colors.gray600}
           onPress={handleFreezeToggle}
-          disabled={!primaryCard || updatingCardId === primaryCard?.id}
+          disabled={!primaryCard || isExpired || updatingCardId === primaryCard?.id}
         />
         <ControlButton
           icon={Settings2}
@@ -311,15 +333,28 @@ export default function CardsScreen() {
         />
       </View>
 
-      <Pressable style={[styles.newCard, styles.newCardDisabled]} disabled>
+      <Pressable
+        style={[styles.newCard, !canReissue && styles.newCardDisabled]}
+        disabled={!canReissue || isReissuing}
+        onPress={() => void handleReissueCard()}>
         <View style={styles.newCardIcon}>
-          <Plus size={18} color={colors.emerald700} />
+          {isReissuing ? (
+            <ActivityIndicator color={colors.emerald700} size="small" />
+          ) : (
+            <Plus size={18} color={colors.emerald700} />
+          )}
         </View>
-        <Text style={styles.newCardText}>Generate New Card</Text>
+        <Text style={styles.newCardText}>
+          {canReissue ? `Reissue card · ${formatGmd(issuance.feeGmd)}` : 'Generate New Card'}
+        </Text>
       </Pressable>
 
+      {reissueError ? <Text style={styles.reissueError}>{reissueError}</Text> : null}
+
       <Text style={styles.feeNote}>
-        Additional cards will be available in a future update.
+        {canReissue
+          ? 'Your previous card expired. Reissue to get a new virtual card.'
+          : 'Additional cards will be available in a future update.'}
       </Text>
     </PullToRefreshScrollView>
   );
@@ -628,6 +663,12 @@ const styles = StyleSheet.create({
     color: colors.gray400,
     textAlign: 'center',
     paddingHorizontal: 16,
+    fontFamily: 'Inter_400Regular',
+  },
+  reissueError: {
+    fontSize: 13,
+    color: colors.red500,
+    textAlign: 'center',
     fontFamily: 'Inter_400Regular',
   },
   successContainer: {

@@ -15,6 +15,11 @@
     "admin:reject": "node --import tsx scripts/admin-kyc.ts reject",
     "admin:provision": "node --import tsx scripts/admin-kyc.ts provision",
     "admin:provision-directpay": "node --import tsx scripts/admin-kyc.ts provision-directpay",
+    "admin:set-user": "node --import tsx scripts/set-admin-user.ts",
+    "admin:push-vapid": "node --import tsx scripts/generate-vapid-keys.ts",
+    "seed:catalog": "node --import tsx scripts/seed-system-catalog.ts",
+    "seed:permissions": "node --import tsx scripts/seed-admin-permissions.ts",
+    "exchange-rate:sync": "node --import tsx scripts/sync-exchange-rate.ts",
     "setup:stripe-inbound": "node --import tsx scripts/setup-stripe-test-inbound.ts"
   },
   "dependencies": {
@@ -24,8 +29,11 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.2.0",
+    "otplib": "^13.4.1",
+    "qrcode": "^1.5.4",
     "resend": "^4.5.1",
     "stripe": "^17.7.0",
+    "web-push": "^3.6.7",
     "zod": "^3.25.28"
   },
   "devDependencies": {
@@ -34,6 +42,8 @@
     "@types/jsonwebtoken": "^9.0.9",
     "@types/multer": "^1.4.13",
     "@types/node": "^22.15.21",
+    "@types/qrcode": "^1.5.6",
+    "@types/web-push": "^3.6.4",
     "prisma": "6.9.0",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"

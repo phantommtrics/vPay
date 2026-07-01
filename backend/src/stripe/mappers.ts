@@ -1,5 +1,7 @@
 import type { User } from '@prisma/client';
 
+import { isStablecoinIssuingEnabled } from './client.js';
+
 export type ParsedDob = {
   day: number;
   month: number;
@@ -36,13 +38,44 @@ export function resolveCountryCode(user: User): string {
   return 'gm';
 }
 
-/** Billing country for Stripe cardholders — UK/EU test programs often require local addresses. */
-export function getCardholderBillingCountry(user: User): string {
+/** Billing countries accepted on Stripe UK legacy Issuing sandbox (pre-stablecoin). */
+const LEGACY_ISSUING_BILLING_COUNTRIES = new Set(['gb', 'ie', 'fr', 'de', 'es', 'it', 'nl']);
+
+function getLegacySandboxBillingCountry(): string {
   const override = process.env.STRIPE_TEST_CARDHOLDER_COUNTRY?.trim().toLowerCase();
   if (override && override.length === 2) {
     return override;
   }
-  return resolveCountryCode(user);
+  return 'gb';
+}
+
+/** True when cardholder billing is remapped for UK legacy sandbox (not stablecoin). */
+export function usesLegacyBillingSandbox(user: User): boolean {
+  if (isStablecoinIssuingEnabled()) {
+    return false;
+  }
+  const userCountry = resolveCountryCode(user);
+  return getCardholderBillingCountry(user) !== userCountry;
+}
+
+/** Billing country for Stripe cardholders — UK/EU test programs often require local addresses. */
+export function getCardholderBillingCountry(user: User): string {
+  const userCountry = resolveCountryCode(user);
+
+  if (isStablecoinIssuingEnabled()) {
+    const override = process.env.STRIPE_TEST_CARDHOLDER_COUNTRY?.trim().toLowerCase();
+    if (override && override.length === 2) {
+      return override;
+    }
+    return userCountry;
+  }
+
+  // Pre-stablecoin: UK legacy Issuing rejects many countries (e.g. GM). Map to a supported test country.
+  if (LEGACY_ISSUING_BILLING_COUNTRIES.has(userCountry)) {
+    return userCountry;
+  }
+
+  return getLegacySandboxBillingCountry();
 }
 
 export function parseDateOfBirth(value: string): ParsedDob {
@@ -175,11 +208,18 @@ export function getTermsAcceptanceIp(user: User): string {
 
 export function buildBillingAddress(user: User) {
   const countryCode = getCardholderBillingCountry(user);
+  const userCountry = resolveCountryCode(user);
+  const billingRemapped = countryCode !== userCountry;
+
+  const postalOverride = process.env.STRIPE_TEST_CARDHOLDER_POSTAL_CODE?.trim();
+  const postalCode = billingRemapped
+    ? postalOverride || 'SW1A 1AA'
+    : user.postalCode!.trim();
 
   return {
     line1: user.address!.trim(),
     city: user.city!.trim(),
-    postal_code: user.postalCode!.trim(),
+    postal_code: postalCode,
     country: countryCode.toUpperCase(),
     state: countryCode.toUpperCase() === 'US' ? 'CA' : undefined,
   };

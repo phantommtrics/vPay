@@ -1,5 +1,7 @@
 import { Resend } from 'resend';
 
+import type { OtpEmailDeviceSummary } from './device/format.js';
+
 const resendApiKey = process.env.RESEND_API_KEY;
 const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
 const appName = process.env.APP_NAME ?? 'vPay';
@@ -13,29 +15,61 @@ function formatFromAddress(): string {
   return `${appName} <${fromEmail}>`;
 }
 
-export async function sendOtpEmail(email: string, code: string): Promise<void> {
+export async function sendOtpEmail(
+  email: string,
+  code: string,
+  options: {
+    device?: OtpEmailDeviceSummary;
+    accountDeviceLocked?: boolean;
+  } = {},
+): Promise<void> {
+  const app = appName;
+
+  const introParagraph = options.device
+    ? `You asked to sign in from <strong>${options.device.deviceLabel}</strong> (${options.device.systemLabel}). Type the code below in the ${app} app.`
+    : `You asked to sign in. Type the code below in the ${app} app.`;
+
+  const lockNote = options.accountDeviceLocked
+    ? `
+        <p style="color: #92400e; font-size: 15px; line-height: 1.5; margin: 0 0 24px; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px;">
+          <strong>Your account is locked to one device.</strong>
+          Only sign in on the phone or tablet you chose in Profile.
+        </p>
+      `
+    : '';
+
   if (!resend) {
     console.log(`[dev] OTP for ${email}: ${code}`);
+    if (options.device) {
+      console.log(`[dev] Sign-in device: ${options.device.plainLines.join(' | ')}`);
+    }
     return;
   }
 
   const { error } = await resend.emails.send({
     from: formatFromAddress(),
     to: email,
-    subject: `Your ${appName} verification code`,
+    subject: `Your ${app} sign-in code`,
     html: `
       <div style="font-family: Inter, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
-        <h1 style="color: #111827; font-size: 24px; margin-bottom: 8px;">Verify your email</h1>
-        <p style="color: #6b7280; font-size: 16px; line-height: 1.5; margin-bottom: 32px;">
-          Enter this code in the ${appName} app to sign in. It expires in 10 minutes.
+        <h1 style="color: #111827; font-size: 24px; margin-bottom: 8px;">Sign in to ${app}</h1>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 24px;">
+          ${introParagraph}
         </p>
-        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 32px;">
+        ${lockNote}
+        <p style="color: #6b7280; font-size: 15px; line-height: 1.5; margin-bottom: 12px;">
+          Your code:
+        </p>
+        <div style="background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 16px; padding: 24px; text-align: center; margin-bottom: 24px;">
           <span style="font-size: 36px; font-weight: 700; letter-spacing: 12px; color: #047857; font-family: monospace;">
             ${code}
           </span>
         </div>
-        <p style="color: #9ca3af; font-size: 14px;">
-          If you didn't request this code, you can safely ignore this email.
+        <p style="color: #6b7280; font-size: 15px; line-height: 1.5; margin-bottom: 24px;">
+          This code works for <strong>10 minutes</strong>.
+        </p>
+        <p style="color: #9ca3af; font-size: 14px; line-height: 1.5;">
+          Did you <strong>not</strong> try to sign in? Ignore this email. Your account stays safe.
         </p>
       </div>
     `,

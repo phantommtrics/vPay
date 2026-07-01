@@ -7,7 +7,7 @@ import {
 import type { Prisma } from '@prisma/client';
 
 import { prisma } from '../db.js';
-import { getFundConfig } from '../fund-config.js';
+import { getFundConfigAsync } from '../fund-config.js';
 import {
   getFundingOrderMetadata,
   getWalletTxFundingSource,
@@ -99,7 +99,7 @@ export async function getWalletBalance(userId: string): Promise<{
   exchangeRate: number;
 }> {
   const wallet = await requireWalletForUser(userId);
-  const { exchangeRate } = getFundConfig();
+  const { exchangeRate } = await getFundConfigAsync();
   return {
     phoneNumber: wallet.phoneNumber,
     balanceGmd: wallet.balanceGmd,
@@ -112,6 +112,7 @@ type WalletMutationInput = {
   userId: string;
   amountGmd: number;
   type: WalletTransactionType;
+  deviceId?: string | null;
   referenceType?: string;
   referenceId?: string;
   description?: string;
@@ -155,6 +156,7 @@ export async function creditWallet(input: WalletMutationInput): Promise<WalletTr
     const walletTx = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
+        deviceId: input.deviceId ?? null,
         type,
         amountGmd,
         balanceBeforeGmd,
@@ -200,6 +202,7 @@ export async function debitWallet(input: WalletMutationInput): Promise<WalletTra
     const walletTx = await tx.walletTransaction.create({
       data: {
         walletId: wallet.id,
+        deviceId: input.deviceId ?? null,
         type: input.type,
         amountGmd,
         balanceBeforeGmd,
@@ -222,6 +225,49 @@ export async function debitWallet(input: WalletMutationInput): Promise<WalletTra
   });
 }
 
+/** Restore wallet balance when Stripe card provisioning fails after the issuance fee was collected. */
+export async function refundCardIssuanceFee(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user?.cardIssuanceWalletTxId) {
+    return false;
+  }
+
+  const debitTx = await prisma.walletTransaction.findUnique({
+    where: { id: user.cardIssuanceWalletTxId },
+  });
+  if (!debitTx || debitTx.type !== WalletTransactionType.CARD_ISSUANCE) {
+    return false;
+  }
+
+  await creditWallet({
+    userId,
+    amountGmd: debitTx.amountGmd,
+    type: WalletTransactionType.ADJUSTMENT,
+    referenceType: 'card_issuance_reversal',
+    referenceId: debitTx.id,
+    description: 'Card issuance refund — provisioning failed',
+    usdEstimate: debitTx.usdEstimate ?? undefined,
+    exchangeRate: debitTx.exchangeRate ?? undefined,
+  });
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      cardIssuancePaidAt: null,
+      cardIssuanceFeeUsd: null,
+      cardIssuanceWalletTxId: null,
+    },
+  });
+
+  log('Card issuance fee refunded after provisioning failure', {
+    userId,
+    amountGmd: debitTx.amountGmd,
+    walletTransactionId: debitTx.id,
+  });
+
+  return true;
+}
+
 export async function creditWalletFromFundingOrder(
   userId: string,
   fundingOrderId: string,
@@ -234,12 +280,13 @@ export async function creditWalletFromFundingOrder(
 
   const orderMeta = getFundingOrderMetadata(order);
   const fundingSource = resolvePaymentSourceFromFundingMetadata(orderMeta);
-  const { exchangeRate } = getFundConfig();
+  const { exchangeRate } = await getFundConfigAsync();
 
   return creditWallet({
     userId,
     amountGmd,
     type: WalletTransactionType.DEPOSIT,
+    deviceId: order.deviceId,
     referenceType: 'funding_order',
     referenceId: fundingOrderId,
     description: fundingSource

@@ -2,6 +2,7 @@ import { randomInt } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
+import { prisma } from '../db.js';
 import { signToken, verifyToken } from '../auth.js';
 import {
   canEditKyc,
@@ -12,9 +13,22 @@ import {
   getLatestOtp,
   saveOtp,
   toPublicUser,
+  toPublicUserSession,
   updateUserProfile,
 } from '../db.js';
 import { sendOtpEmail, sendWelcomeEmail } from '../email.js';
+import {
+  assertDeviceLoginAllowed,
+  DeviceLoginError,
+  recordMonthlyDeviceLogin,
+} from '../device/limits.js';
+import { formatDeviceForOtpEmail } from '../device/format.js';
+import {
+  deviceInfoSchema,
+  getClientIp,
+  registerOrUpdateUserDevice,
+  resolveUserDeviceId,
+} from '../device/service.js';
 import { log } from '../logger.js';
 import { formatZodError } from '../zod-utils.js';
 import { WalletPhoneConflictError } from '../wallet/service.js';
@@ -22,11 +36,13 @@ import { PhoneAlreadyInUseError } from '../phone.js';
 
 const sendOtpSchema = z.object({
   email: z.string().email('Enter a valid email address'),
+  device: deviceInfoSchema.optional(),
 });
 
 const verifyOtpSchema = z.object({
   email: z.string().email(),
   code: z.string().length(6, 'Code must be 6 digits').regex(/^\d+$/, 'Code must be numeric'),
+  device: deviceInfoSchema.optional(),
 });
 
 const profileSchema = z.object({
@@ -40,6 +56,11 @@ const profileSchema = z.object({
   countryCode: z.string().min(2).max(2).optional(),
   postalCode: z.string().min(1).max(20).optional(),
   documentType: z.string().min(1).max(50).optional(),
+});
+
+const deviceLockSchema = z.object({
+  enabled: z.boolean(),
+  device: deviceInfoSchema.optional(),
 });
 
 function generateOtp(): string {
@@ -72,16 +93,35 @@ export async function handleSendOtp(req: Request, res: Response): Promise<void> 
   }
 
   const email = parsed.data.email.toLowerCase();
+  const deviceInput = parsed.data.device;
+  const existingUser = await findUserByEmail(email);
+
+  if (existingUser && deviceInput) {
+    try {
+      await assertDeviceLoginAllowed(existingUser, deviceInput);
+    } catch (err) {
+      if (err instanceof DeviceLoginError) {
+        res.status(403).json({ error: err.message, code: err.code });
+        return;
+      }
+      throw err;
+    }
+  }
+
   const code = generateOtp();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-  log('OTP requested', { email });
+  log('OTP requested', { email, hasDevice: Boolean(deviceInput) });
   await saveOtp(email, code, expiresAt);
 
-  const isNewUser = !(await findUserByEmail(email));
+  const isNewUser = !existingUser;
+  const deviceSummary = deviceInput ? formatDeviceForOtpEmail(deviceInput) : undefined;
 
   try {
-    await sendOtpEmail(email, code);
+    await sendOtpEmail(email, code, {
+      device: deviceSummary,
+      accountDeviceLocked: existingUser?.deviceLockEnabled ?? false,
+    });
     log('OTP sent', { email });
 
     if (isNewUser) {
@@ -96,7 +136,11 @@ export async function handleSendOtp(req: Request, res: Response): Promise<void> 
       }
     }
 
-    res.json({ ok: true, message: 'Verification code sent' });
+    res.json({
+      ok: true,
+      message: 'Verification code sent',
+      accountDeviceLocked: existingUser?.deviceLockEnabled ?? false,
+    });
   } catch (err) {
     log('OTP send failed', { email, error: err instanceof Error ? err.message : 'unknown' });
     res.status(500).json({ error: 'Failed to send verification email' });
@@ -138,11 +182,128 @@ export async function handleVerifyOtp(req: Request, res: Response): Promise<void
   }
 
   const token = signToken({ sub: user.id, email: user.email });
-  log('User signed in', { userId: user.id, email });
+
+  let device = null;
+  if (parsed.data.device) {
+    try {
+      await assertDeviceLoginAllowed(user, parsed.data.device);
+      device = await registerOrUpdateUserDevice(
+        user.id,
+        parsed.data.device,
+        getClientIp(req),
+      );
+      await recordMonthlyDeviceLogin(user.id, parsed.data.device);
+    } catch (err) {
+      if (err instanceof DeviceLoginError) {
+        res.status(403).json({ error: err.message, code: err.code });
+        return;
+      }
+      throw err;
+    }
+  }
+
+  log('User signed in', { userId: user.id, email, deviceId: device?.id ?? null });
 
   res.json({
     token,
-    user: toPublicUser(user),
+    user: await toPublicUserSession(user, device?.id ?? null),
+    device,
+  });
+}
+
+export async function handleRegisterDevice(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = deviceInfoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: formatZodError(parsed.error) });
+    return;
+  }
+
+  const device = await registerOrUpdateUserDevice(
+    req.userId!,
+    parsed.data,
+    getClientIp(req),
+  );
+
+  res.json({ device });
+}
+
+export async function handleUpdateDeviceLock(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = deviceLockSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: formatZodError(parsed.error) });
+    return;
+  }
+
+  const userId = req.userId!;
+  const user = await findUserById(userId);
+  if (!user) {
+    res.status(404).json({ error: 'User not found' });
+    return;
+  }
+
+  if (parsed.data.enabled) {
+    if (!parsed.data.device) {
+      res.status(400).json({
+        error: 'Device information is required to enable device lock.',
+        code: 'DEVICE_REQUIRED',
+      });
+      return;
+    }
+
+    const device = await registerOrUpdateUserDevice(
+      userId,
+      parsed.data.device,
+      getClientIp(req),
+    );
+
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        deviceLockEnabled: true,
+        lockedDeviceId: device.id,
+      },
+    });
+
+    log('Device lock enabled', { userId, lockedDeviceId: device.id });
+
+    res.json({
+      user: await toPublicUserSession(updated, device.id),
+      device,
+    });
+    return;
+  }
+
+  const headerDeviceId = req.headers['x-device-id'];
+  const requestDeviceId =
+    typeof headerDeviceId === 'string' ? headerDeviceId : undefined;
+  const resolvedDeviceId = await resolveUserDeviceId(userId, requestDeviceId);
+
+  if (
+    user.deviceLockEnabled &&
+    user.lockedDeviceId &&
+    resolvedDeviceId &&
+    resolvedDeviceId !== user.lockedDeviceId
+  ) {
+    res.status(403).json({
+      error:
+        'Device lock can only be turned off from your registered device. Open vPay on that device to disable this setting.',
+      code: 'DEVICE_LOCK_VIOLATION',
+    });
+    return;
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: userId },
+    data: {
+      deviceLockEnabled: false,
+      lockedDeviceId: null,
+    },
+  });
+
+  log('Device lock disabled', { userId });
+
+  res.json({
+    user: await toPublicUserSession(updated, resolvedDeviceId),
   });
 }
 
@@ -153,7 +314,13 @@ export async function handleMe(req: AuthedRequest, res: Response): Promise<void>
     return;
   }
 
-  res.json({ user: toPublicUser(user) });
+  const headerDeviceId = req.headers['x-device-id'];
+  const deviceId =
+    typeof headerDeviceId === 'string'
+      ? await resolveUserDeviceId(req.userId!, headerDeviceId)
+      : null;
+
+  res.json({ user: await toPublicUserSession(user, deviceId) });
 }
 
 export async function handleUpdateProfile(req: AuthedRequest, res: Response): Promise<void> {
@@ -175,7 +342,7 @@ export async function handleUpdateProfile(req: AuthedRequest, res: Response): Pr
     }
     const user = await updateUserProfile(req.userId!, parsed.data);
     log('Profile patch saved', { userId: req.userId, fields: Object.keys(parsed.data) });
-    res.json({ user: toPublicUser(user) });
+    res.json({ user: await toPublicUser(user) });
   } catch (err) {
     if (err instanceof PhoneAlreadyInUseError || err instanceof WalletPhoneConflictError) {
       res.status(409).json({ error: err.message });

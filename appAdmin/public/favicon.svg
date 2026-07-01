@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img">
+  <title>VPay Africa</title>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="#1A4DB8"/>
+  <rect x="1" y="1" width="62" height="62" rx="14" fill="none" stroke="#2860D4" stroke-width="1"/>
+  <text
+    x="32"
+    y="40"
+    text-anchor="middle"
+    font-family="Inter, system-ui, sans-serif"
+    font-size="30"
+    font-weight="700"
+    letter-spacing="-1"
+    fill="#FFFFFF">
+    VPay
+  </text>
+  <rect x="16" y="46" width="32" height="4" rx="2" fill="#E8A020"/>
+</svg>

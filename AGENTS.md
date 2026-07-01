@@ -7,6 +7,7 @@ Monorepo for the vPay virtual card app.
 ```
 vPay/
 ├── mobile/          # Expo 53 React Native app
+├── appAdmin/        # Vite React admin portal
 ├── backend/         # Express API + Prisma + PostgreSQL
 └── docs/            # Design and project docs
 ```
@@ -21,6 +22,7 @@ npm run mobile:ios     # iOS simulator
 npm run mobile:android
 npm run backend        # start API dev server (watch mode)
 npm run backend:db:migrate  # run Prisma migrations
+npm run admin          # start admin portal (Vite, port 5173)
 ```
 
 Or work directly in each package:

@@ -40,6 +40,7 @@ export function VirtualCard({
   const [revealed, setRevealed] = useState(false);
 
   const isFrozen = card.status === 'inactive';
+  const isExpired = card.expired;
   const maskedNumber = `•••• •••• •••• ${card.last4}`;
   const expiry = formatExpiry(card.expMonth, card.expYear);
   const holderName = card.cardholderName.trim().toUpperCase();
@@ -49,9 +50,11 @@ export function VirtualCard({
     <View style={[styles.wrapper, style]}>
       <LinearGradient
         colors={
-          isFrozen
-            ? [colors.gray500, colors.gray600, colors.gray700]
-            : [colors.emerald950, colors.emerald800, colors.teal900]
+          isExpired
+            ? [colors.gray600, colors.gray700, colors.gray800]
+            : isFrozen
+              ? [colors.gray500, colors.gray600, colors.gray700]
+              : [colors.emerald950, colors.emerald800, colors.teal900]
         }
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
@@ -59,7 +62,15 @@ export function VirtualCard({
         <View style={styles.circleTop} />
         <View style={styles.circleBottom} />
 
-        {isFrozen && (
+        {isExpired && (
+          <View style={styles.frozenOverlay}>
+            <View style={styles.frozenBadge}>
+              <Text style={styles.frozenText}>Card Expired</Text>
+            </View>
+          </View>
+        )}
+
+        {isFrozen && !isExpired && (
           <View style={styles.frozenOverlay}>
             <View style={styles.frozenBadge}>
               <Text style={styles.frozenText}>Card Frozen</Text>
@@ -102,7 +113,7 @@ export function VirtualCard({
                     onPress={() => setRevealed(true)}
                     style={styles.iconButton}
                     hitSlop={8}
-                    disabled={!canReveal}>
+                    disabled={!canReveal || isExpired}>
                     <Eye size={18} color={colors.white} />
                   </Pressable>
                 </View>

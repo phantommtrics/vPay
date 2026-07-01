@@ -2,14 +2,17 @@ import type { Response } from 'express';
 import { VirtualCardStatus } from '@prisma/client';
 import { z } from 'zod';
 
+import { isVirtualCardActive } from '../card-expiry.js';
 import {
   findUserById,
   findUserCard,
+  findLatestUserCard,
   listUserCards,
   toPublicVirtualCard,
   updateVirtualCardStatus,
 } from '../db.js';
 import { log } from '../logger.js';
+import { getCardExpiryConfigAsync, getCardIssuanceConfigAsync } from '../fund-config.js';
 import { getStripePublishableKey } from '../stripe/client.js';
 import { createEphemeralKey, updateCardStatus } from '../stripe/issuing.js';
 import { sanitizeUserFacingText } from '../user-facing-text.js';
@@ -45,12 +48,27 @@ export async function handleListCards(req: AuthedRequest, res: Response): Promis
 
   const cards = await listUserCards(user.id);
   const publicCards = await Promise.all(cards.map((card) => toPublicVirtualCard(card, user)));
+  const issuanceConfig = await getCardIssuanceConfigAsync();
+  const expiryConfig = await getCardExpiryConfigAsync();
+  const latestCard = await findLatestUserCard(user.id);
+  const hasActiveCard = latestCard ? isVirtualCardActive(latestCard) : false;
+  const canReissue = Boolean(latestCard && !hasActiveCard);
 
   res.json({
     cards: publicCards,
     provisioning: {
       status: user.stripeProvisioningStatus.toLowerCase(),
       error: sanitizeUserFacingText(user.stripeProvisioningError),
+    },
+    issuance: {
+      feeUsd: issuanceConfig.feeUsd,
+      feeGmd: issuanceConfig.feeGmd,
+      exchangeRate: issuanceConfig.exchangeRate,
+      required: issuanceConfig.required,
+      expiryYears: expiryConfig.expiryYears,
+      paid: Boolean(user.cardIssuancePaidAt) && !canReissue,
+      paidAt: canReissue ? null : user.cardIssuancePaidAt?.toISOString() ?? null,
+      canReissue,
     },
     stripePublishableKey: getStripePublishableKey(),
     stripeConnectedAccountId: user.stripeConnectedAccountId?.startsWith('platform:')
@@ -88,6 +106,11 @@ export async function handleCreateEphemeralKey(
   const card = await findUserCard(user.id, String(req.params.id));
   if (!card) {
     res.status(404).json({ error: 'Card not found' });
+    return;
+  }
+
+  if (!isVirtualCardActive(card)) {
+    res.status(410).json({ error: 'This card has expired. Reissue a new card to continue.' });
     return;
   }
 
@@ -132,6 +155,11 @@ export async function handleUpdateCardStatus(
   const card = await findUserCard(user.id, String(req.params.id));
   if (!card) {
     res.status(404).json({ error: 'Card not found' });
+    return;
+  }
+
+  if (!isVirtualCardActive(card)) {
+    res.status(410).json({ error: 'This card has expired. Reissue a new card to continue.' });
     return;
   }
 

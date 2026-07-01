@@ -9,6 +9,7 @@ import {
   Home,
   Lock,
   Phone,
+  ScanFace,
   User as UserIcon,
 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
@@ -41,6 +42,7 @@ const STEPS = [
   { key: 'contact', title: 'Contact info', subtitle: 'We need this for account verification' },
   { key: 'address', title: 'Your address', subtitle: 'Required for KYC compliance' },
   { key: 'documents', title: 'Identity document', subtitle: 'Upload a valid government-issued ID' },
+  { key: 'selfie', title: 'Selfie verification', subtitle: 'Take a clear photo of your face so we can match it to your ID' },
   { key: 'review', title: 'Review & submit', subtitle: 'Submit for manual approval' },
 ] as const;
 
@@ -90,7 +92,7 @@ export default function PersonalDetailsScreen() {
   useEffect(() => {
     if (!user) return;
     setDocumentType((user.documentType as DocumentType | null) ?? null);
-  }, [user?.documentType, user?.documentFrontUrl, user?.documentBackUrl]);
+  }, [user?.documentType, user?.documentFrontUrl, user?.documentBackUrl, user?.selfieUrl]);
 
   if (!user) return null;
 
@@ -152,6 +154,7 @@ export default function PersonalDetailsScreen() {
     if (!payload.postalCode) return 'Postal code is required';
     if (!acceptCardTerms) return 'You must accept the card terms';
     if (!user.documentFrontUrl) return 'Front of document is required';
+    if (!user.selfieUrl) return 'Selfie photo is required';
     return null;
   };
 
@@ -175,6 +178,9 @@ export default function PersonalDetailsScreen() {
       case 'documents':
         if (!documentType) return 'Select a document type';
         if (!user.documentFrontUrl) return 'Front of document is required';
+        return null;
+      case 'selfie':
+        if (!user.selfieUrl) return 'Selfie photo is required';
         return null;
       default:
         return null;
@@ -359,6 +365,26 @@ export default function PersonalDetailsScreen() {
               </View>
             ) : null}
 
+            {step.key === 'selfie' ? (
+              <View style={styles.form}>
+                <View style={styles.selfieTips}>
+                  <Text style={styles.selfieTipsTitle}>Tips for a good selfie</Text>
+                  <Text style={styles.selfieTipsItem}>• Face the camera directly in good lighting</Text>
+                  <Text style={styles.selfieTipsItem}>• Remove hats, sunglasses, or face coverings</Text>
+                  <Text style={styles.selfieTipsItem}>• Make sure your full face is visible</Text>
+                </View>
+                <DocumentUpload
+                  label="Selfie photo"
+                  hint="We will compare this photo to the face on your ID document"
+                  required
+                  value={user.selfieUrl}
+                  cameraFacing="front"
+                  primaryAction="camera"
+                  onUpload={(uri) => uploadKycDocument('selfie', uri)}
+                />
+              </View>
+            ) : null}
+
             {step.key === 'review' ? (
               <View style={styles.reviewCard}>
                 <ReviewRow label="Name" value={`${firstName} ${lastName}`} />
@@ -369,6 +395,7 @@ export default function PersonalDetailsScreen() {
                 <ReviewRow label="Country" value={country} />
                 <ReviewRow label="Postal code" value={postalCode} />
                 <ReviewRow label="Document" value={getDocumentTypeLabel(documentType)} />
+                <ReviewRow label="Selfie" value={user.selfieUrl ? 'Uploaded' : 'Missing'} />
                 <Pressable
                   style={styles.termsRow}
                   onPress={() => setAcceptCardTerms((value) => !value)}>
@@ -497,6 +524,7 @@ function StepIcon({ step }: { step: StepKey }) {
     contact: Phone,
     address: Home,
     documents: FileText,
+    selfie: ScanFace,
     review: CheckCircle2,
   };
   const Icon = icons[step];
@@ -632,6 +660,26 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   form: { gap: 16 },
+  selfieTips: {
+    backgroundColor: colors.emerald50,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.emerald100,
+    padding: 14,
+    gap: 6,
+  },
+  selfieTipsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.gray800,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  selfieTipsItem: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.gray600,
+    fontFamily: 'Inter_400Regular',
+  },
   field: { gap: 8 },
   label: {
     fontSize: 14,

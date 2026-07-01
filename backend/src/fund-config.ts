@@ -1,10 +1,23 @@
+import {
+  getPlatformConfigCache,
+  setPlatformConfigCache,
+} from './settlement/config-cache.js';
+import type { WalletTopupFeePricing } from './settlement/calculator.js';
+import {
+  getCardExpiryConfigFromCatalog,
+  getCardIssuanceConfigFromCatalog,
+  getFundConfigFromCatalog,
+  getPlatformConfig,
+  getWalletTopupFeePricing,
+} from './settlement/platform-config.js';
+
 function parseEnvNumber(value: string | undefined, fallback: number): number {
   if (value === undefined || value.trim() === '') return fallback;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-export function getFundConfig() {
+function envFundConfig() {
   const exchangeRate = parseEnvNumber(process.env.FUND_EXCHANGE_RATE, 71);
   const feePercent = parseEnvNumber(process.env.FUND_FEE_PERCENT, 0.02);
 
@@ -13,6 +26,91 @@ export function getFundConfig() {
     feePercent: feePercent >= 0 ? feePercent : 0.02,
     simulationEnabled: isFundSimulationEnabled(),
   };
+}
+
+/** Sync read — uses warm cache when available, otherwise env defaults. */
+export function getFundConfig() {
+  const cached = getPlatformConfigCache();
+  if (cached) {
+    return {
+      exchangeRate: cached.exchangeRate,
+      feePercent: cached.feePercent,
+      simulationEnabled: isFundSimulationEnabled(),
+    };
+  }
+  return envFundConfig();
+}
+
+export type FundConfigResponse = {
+  exchangeRate: number;
+  /** Present when wallet top-up uses a fixed rate UCP. */
+  feePercent?: number;
+  walletTopupFee: WalletTopupFeePricing;
+  simulationEnabled: boolean;
+};
+
+export async function getFundConfigAsync(): Promise<FundConfigResponse> {
+  const [{ exchangeRate }, walletTopupFee] = await Promise.all([
+    getFundConfigFromCatalog(),
+    getWalletTopupFeePricing(),
+  ]);
+
+  return {
+    exchangeRate,
+    ...(walletTopupFee.type === 'fixed' ? { feePercent: walletTopupFee.feePercent } : {}),
+    walletTopupFee,
+    simulationEnabled: isFundSimulationEnabled(),
+  };
+}
+
+/** Virtual card expiration — passed to Stripe on card create (exp_month / exp_year). */
+export function getCardExpiryConfig() {
+  const cached = getPlatformConfigCache();
+  if (cached) {
+    return { expiryYears: cached.cardExpiryYears };
+  }
+  const expiryYears = parseEnvNumber(process.env.CARD_EXPIRY_YEARS, 1);
+  return {
+    expiryYears: expiryYears > 0 ? expiryYears : 1,
+  };
+}
+
+export async function getCardExpiryConfigAsync() {
+  return getCardExpiryConfigFromCatalog();
+}
+
+/** One-time fee charged from the vPay wallet before Stripe card provisioning. */
+export function getCardIssuanceConfig() {
+  const cached = getPlatformConfigCache();
+  if (cached) {
+    const feeUsd = cached.cardIssuanceFeeUsd;
+    return {
+      feeUsd,
+      feeGmd: Math.ceil(feeUsd * cached.exchangeRate),
+      exchangeRate: cached.exchangeRate,
+      required: feeUsd > 0,
+    };
+  }
+
+  const { exchangeRate } = getFundConfig();
+  const feeUsd = parseEnvNumber(process.env.CARD_ISSUANCE_FEE_USD, 1.5);
+  const normalizedFeeUsd = feeUsd >= 0 ? feeUsd : 0;
+
+  return {
+    feeUsd: normalizedFeeUsd,
+    feeGmd: Math.ceil(normalizedFeeUsd * exchangeRate),
+    exchangeRate,
+    required: normalizedFeeUsd > 0,
+  };
+}
+
+export async function getCardIssuanceConfigAsync() {
+  return getCardIssuanceConfigFromCatalog();
+}
+
+export async function warmPlatformConfigCache(): Promise<void> {
+  const config = await getPlatformConfig();
+  setPlatformConfigCache(config);
 }
 
 /** Dev-only: simulate funding without real directPay / wallet payments. */

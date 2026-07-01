@@ -8,6 +8,7 @@ type UseCardsResult = {
   cards: VirtualCardSummary[];
   primaryCard: VirtualCardSummary | null;
   provisioning: CardsResponse['provisioning'];
+  issuance: CardsResponse['issuance'];
   stripePublishableKey: string | null;
   stripeConnectedAccountId: string | null;
   loading: boolean;
@@ -24,6 +25,16 @@ export function useCards(enabled = true): UseCardsResult {
   const [provisioning, setProvisioning] = useState<CardsResponse['provisioning']>({
     status: 'none',
     error: null,
+  });
+  const [issuance, setIssuance] = useState<CardsResponse['issuance']>({
+    feeUsd: 0,
+    feeGmd: 0,
+    exchangeRate: 71,
+    required: false,
+    expiryYears: 1,
+    paid: false,
+    paidAt: null,
+    canReissue: false,
   });
   const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
   const [stripeConnectedAccountId, setStripeConnectedAccountId] = useState<string | null>(null);
@@ -47,6 +58,7 @@ export function useCards(enabled = true): UseCardsResult {
       const data = await fetchCards();
       setCards(data.cards);
       setProvisioning(data.provisioning);
+      setIssuance(data.issuance);
       setStripePublishableKey(data.stripePublishableKey);
       setStripeConnectedAccountId(data.stripeConnectedAccountId);
     } catch (err) {
@@ -82,8 +94,9 @@ export function useCards(enabled = true): UseCardsResult {
 
   return {
     cards,
-    primaryCard: cards[0] ?? null,
+    primaryCard: cards.find((card) => card.status !== 'canceled') ?? null,
     provisioning,
+    issuance,
     stripePublishableKey,
     stripeConnectedAccountId,
     loading,

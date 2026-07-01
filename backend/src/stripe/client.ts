@@ -62,6 +62,18 @@ export function getIssuingPlatformProgram(): string | null {
   return program;
 }
 
+export function isStablecoinIssuingEnabled(): boolean {
+  return Boolean(getIssuingPlatformProgram());
+}
+
+export function getPlatformFinancialAccountId(): string | null {
+  const id = process.env.STRIPE_PLATFORM_FINANCIAL_ACCOUNT_ID?.trim();
+  if (!id || id.includes('...')) {
+    return null;
+  }
+  return id;
+}
+
 export function getStripePublishableKey(): string | null {
   const key = process.env.STRIPE_PUBLISHABLE_KEY;
   if (!key || key.includes('...')) {
@@ -70,7 +82,14 @@ export function getStripePublishableKey(): string | null {
   return key;
 }
 
-/** Issuing card currency — must match what your Stripe Issuing program supports (e.g. gbp for UK). */
+/** Issuing card currency — stablecoin programs require USD; legacy UK test defaults to GBP. */
 export function getIssuingCurrency(): string {
-  return (process.env.STRIPE_ISSUING_CURRENCY ?? 'usd').trim().toLowerCase();
+  const explicit = process.env.STRIPE_ISSUING_CURRENCY?.trim().toLowerCase();
+  if (explicit) {
+    return explicit;
+  }
+  if (isStablecoinIssuingEnabled()) {
+    return 'usd';
+  }
+  return 'gbp';
 }

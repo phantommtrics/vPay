@@ -1,16 +1,39 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
-import { ArrowLeft, Fingerprint, ScanFace, ShieldCheck } from 'lucide-react-native';
-import { Pressable, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import {
+  AlertCircle,
+  ArrowLeft,
+  Fingerprint,
+  ScanFace,
+  ShieldCheck,
+  Smartphone,
+} from 'lucide-react-native';
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAppLock } from '@/contexts/AppLockContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { updateDeviceLock } from '@/lib/api';
 import { getBiometricLabel } from '@/lib/biometrics';
+import { collectDeviceInfo } from '@/lib/device-info';
 import { colors, radius, spacing } from '@/constants/theme';
 
 export default function SecurityScreen() {
   const insets = useSafeAreaInsets();
+  const { user, refreshUser } = useAuth();
   const { biometricsAvailable, biometricMethod, appLockEnabled, setAppLockEnabled, lock } =
     useAppLock();
+  const [deviceLockBusy, setDeviceLockBusy] = useState(false);
+  const [deviceLockError, setDeviceLockError] = useState('');
 
   const biometricLabel = getBiometricLabel(biometricMethod);
   const LockIcon = biometricMethod === 'faceId' ? ScanFace : Fingerprint;
@@ -24,13 +47,29 @@ export default function SecurityScreen() {
         ? 'Require biometrics to open vPay. If unavailable, sign in with your email.'
         : 'Sign in with your email when the app is locked.';
 
+  const deviceLockOn = Boolean(user?.deviceLockEnabled && user?.deviceLockActiveOnThisDevice);
+
+  const handleDeviceLockToggle = async (enabled: boolean) => {
+    setDeviceLockError('');
+    setDeviceLockBusy(true);
+    try {
+      const deviceInfo = enabled ? await collectDeviceInfo() : undefined;
+      await updateDeviceLock(enabled, deviceInfo);
+      await refreshUser();
+    } catch (err) {
+      setDeviceLockError(err instanceof Error ? err.message : 'Could not update device lock');
+    } finally {
+      setDeviceLockBusy(false);
+    }
+  };
+
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.topBar}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={22} color={colors.gray900} />
         </Pressable>
-        <Text style={styles.screenTitle}>Security</Text>
+        <Text style={styles.screenTitle}>Security & Limits</Text>
         <View style={styles.headerSpacer} />
       </View>
 
@@ -81,6 +120,65 @@ export default function SecurityScreen() {
             <LockIcon size={20} color={colors.emerald700} />
             <Text style={styles.lockButtonText}>Lock now</Text>
           </Pressable>
+        ) : null}
+
+        {user ? (
+          <View style={styles.sectionCard}>
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIcon, { backgroundColor: colors.emerald50 }]}>
+                <Smartphone size={18} color={colors.emerald600} />
+              </View>
+              <View style={styles.sectionHeaderText}>
+                <Text style={styles.sectionTitle}>Device security</Text>
+                <Text style={styles.sectionSubtitle}>
+                  Limit sign-in to this device only, or use up to{' '}
+                  {user.monthlyDevicesLimit ?? 3} devices per calendar month.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.deviceToggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleLabel}>Lock account to this device</Text>
+                <Text style={styles.toggleHint}>
+                  {deviceLockOn
+                    ? 'Your account can only be opened on this phone or tablet.'
+                    : 'When enabled, you cannot sign in from another device until you turn this off here.'}
+                </Text>
+              </View>
+              {deviceLockBusy ? (
+                <ActivityIndicator size="small" color={colors.emerald600} />
+              ) : (
+                <Switch
+                  value={deviceLockOn}
+                  onValueChange={(value) => void handleDeviceLockToggle(value)}
+                  trackColor={{ false: colors.gray200, true: colors.emerald200 }}
+                  thumbColor={deviceLockOn ? colors.emerald600 : colors.gray400}
+                />
+              )}
+            </View>
+
+            <Text style={styles.usageNote}>
+              {user.monthlyDevicesUsed ?? 0} of {user.monthlyDevicesLimit ?? 3} devices used this
+              month on your account.
+            </Text>
+
+            {user.deviceLockEnabled && !user.deviceLockActiveOnThisDevice ? (
+              <View style={styles.deviceLockWarning}>
+                <AlertCircle size={16} color={colors.amber600} />
+                <Text style={styles.deviceLockWarningText}>
+                  Device lock is active on another device. Sign in there to manage this setting.
+                </Text>
+              </View>
+            ) : null}
+
+            {deviceLockError ? (
+              <View style={styles.deviceLockError}>
+                <AlertCircle size={16} color={colors.red500} />
+                <Text style={styles.deviceLockErrorText}>{deviceLockError}</Text>
+              </View>
+            ) : null}
+          </View>
         ) : null}
       </ScrollView>
     </View>
@@ -165,11 +263,30 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.gray50,
   },
+  deviceToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.gray50,
+  },
+  toggleCopy: {
+    flex: 1,
+    gap: 4,
+  },
   toggleLabel: {
     fontSize: 15,
     fontWeight: '500',
     color: colors.gray700,
     fontFamily: 'Inter_500Medium',
+  },
+  toggleHint: {
+    fontSize: 12,
+    color: colors.gray500,
+    lineHeight: 17,
+    fontFamily: 'Inter_400Regular',
   },
   methodNote: {
     fontSize: 13,
@@ -181,6 +298,41 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.gray500,
     lineHeight: 18,
+    fontFamily: 'Inter_400Regular',
+  },
+  usageNote: {
+    fontSize: 12,
+    color: colors.emerald700,
+    fontFamily: 'Inter_400Regular',
+  },
+  deviceLockWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.amber100,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  deviceLockWarningText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.gray700,
+    lineHeight: 17,
+    fontFamily: 'Inter_400Regular',
+  },
+  deviceLockError: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.red50,
+    borderRadius: radius.md,
+    padding: spacing.md,
+  },
+  deviceLockErrorText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.red500,
+    lineHeight: 17,
     fontFamily: 'Inter_400Regular',
   },
   lockButton: {

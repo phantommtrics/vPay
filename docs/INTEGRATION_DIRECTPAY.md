@@ -45,7 +45,8 @@ Platform operator must configure Wave/APS gateway credentials for each provision
 ```bash
 cd backend
 npm run admin:approve -- user@example.com              # KYC approve only
-npm run admin:provision -- user@example.com            # Stripe card (requires approved KYC)
+npm run admin:provision -- user@example.com            # Stripe card, free (requires approved KYC)
+npm run admin:provision -- user@example.com --charge   # Stripe card, debit user wallet first
 npm run admin:provision-directpay -- user@example.com  # directPay merchant (requires approved KYC)
 ```
 

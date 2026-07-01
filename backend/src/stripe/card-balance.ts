@@ -4,6 +4,8 @@ import { prisma } from '../db.js';
 import { isFundSimulationEnabled } from '../fund-config.js';
 import { log } from '../logger.js';
 import { creditStripeFinancialAccount } from './dev-inbound-payment.js';
+import { fundConnectedAccountUsdc } from './outbound-payments.js';
+import { isStablecoinIssuingEnabled } from './client.js';
 
 export type CardBalanceSource = 'stripe' | 'simulated' | 'unavailable';
 
@@ -43,7 +45,14 @@ export async function creditCardBalanceUsd(
 
   let stripeCredited = false;
   try {
-    stripeCredited = await creditStripeFinancialAccount(user, creditAmountUsd);
+    if (isStablecoinIssuingEnabled()) {
+      const outbound = await fundConnectedAccountUsdc(user, creditAmountUsd);
+      stripeCredited = outbound.credited;
+    }
+
+    if (!stripeCredited) {
+      stripeCredited = await creditStripeFinancialAccount(user, creditAmountUsd);
+    }
   } catch (e) {
     log('Card fund: Stripe credit threw', {
       userId: user.id,

@@ -25,6 +25,7 @@ export type User = {
   documentType: string | null;
   documentFrontUrl: string | null;
   documentBackUrl: string | null;
+  selfieUrl: string | null;
   kycSubmittedAt: string | null;
   kycRejectionReason: string | null;
   cardTermsAcceptedAt: string | null;
@@ -34,6 +35,10 @@ export type User = {
   directPayProvisioningStatus: DirectPayProvisioningStatus;
   directPayProvisioningError: string | null;
   directPayBusinessId: string | null;
+  deviceLockEnabled: boolean;
+  deviceLockActiveOnThisDevice?: boolean;
+  monthlyDevicesUsed: number;
+  monthlyDevicesLimit: number;
 };
 
 export type CheckoutWallet = {
@@ -94,6 +99,7 @@ export type VirtualCardSummary = {
   expMonth: number;
   expYear: number;
   status: VirtualCardStatus;
+  expired: boolean;
   balance: number;
   balanceUsd: number;
   balanceGmdEstimate: number;
@@ -108,8 +114,29 @@ export type CardsResponse = {
     status: StripeProvisioningStatus;
     error: string | null;
   };
+  issuance: {
+    feeUsd: number;
+    feeGmd: number;
+    exchangeRate: number;
+    required: boolean;
+    expiryYears: number;
+    paid: boolean;
+    paidAt: string | null;
+    canReissue: boolean;
+  };
   stripePublishableKey: string | null;
   stripeConnectedAccountId: string | null;
+};
+
+export type CardIssuancePayResponse = {
+  ok: boolean;
+  feeUsd?: number;
+  feeGmd?: number;
+  paidAt?: string;
+  alreadyPaid?: boolean;
+  feeWaived?: boolean;
+  wallet?: WalletSummary;
+  provisioning: { status: string };
 };
 
 export type KycSubmitPayload = {

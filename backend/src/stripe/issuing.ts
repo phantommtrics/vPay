@@ -1,8 +1,9 @@
 import type { User } from '@prisma/client';
 import type Stripe from 'stripe';
 
+import { computeCardExpirationAsync } from '../card-expiry.js';
 import { log } from '../logger.js';
-import { getStripe, getIssuingPlatformProgram, getIssuingCurrency, stripeApiVersion } from './client.js';
+import { getStripe, getIssuingPlatformProgram, getIssuingCurrency, isStablecoinIssuingEnabled, stripeApiVersion } from './client.js';
 import {
   buildBillingAddress,
   getCardholderName,
@@ -11,6 +12,7 @@ import {
   normalizePhoneE164,
   parseDateOfBirth,
   resolveCountryCode,
+  usesLegacyBillingSandbox,
 } from './mappers.js';
 
 export type IssuedCard = {
@@ -63,6 +65,14 @@ export async function createCardholder(
   const dob = parseDateOfBirth(user.dateOfBirth!);
   const billing = buildBillingAddress(user);
 
+  if (usesLegacyBillingSandbox(user)) {
+    log('Legacy Issuing sandbox: remapped cardholder billing country', {
+      userId: user.id,
+      userCountry: countryCode,
+      billingCountry: billing.country,
+    });
+  }
+
   const cardholder = await stripe.issuing.cardholders.create(
     {
       type: 'individual',
@@ -74,12 +84,23 @@ export async function createCardholder(
         first_name: user.firstName!.trim(),
         last_name: user.lastName!.trim(),
         dob,
-        card_issuing: {
-          user_terms_acceptance: {
-            date: getTermsAcceptanceUnix(user),
-            ip: getTermsAcceptanceIp(user),
-          },
-        },
+        ...(isStablecoinIssuingEnabled()
+          ? {
+              user_terms_acceptance: {
+                lead: {
+                  date: getTermsAcceptanceUnix(user),
+                  ip: getTermsAcceptanceIp(user),
+                },
+              },
+            }
+          : {
+              card_issuing: {
+                user_terms_acceptance: {
+                  date: getTermsAcceptanceUnix(user),
+                  ip: getTermsAcceptanceIp(user),
+                },
+              },
+            }),
       },
       billing: {
         address: billing,
@@ -100,11 +121,18 @@ export async function createVirtualCard(
   const stripe = getStripe();
   const isPlatform = connectedAccountId.startsWith('platform:');
 
-  const params: Stripe.Issuing.CardCreateParams = {
+  const { expMonth, expYear } = await computeCardExpirationAsync();
+
+  const params = {
     cardholder: cardholderId,
     currency: getIssuingCurrency(),
-    type: 'virtual',
-    status: 'active',
+    type: 'virtual' as const,
+    status: 'active' as const,
+    exp_month: expMonth,
+    exp_year: expYear,
+  } satisfies Stripe.Issuing.CardCreateParams & {
+    exp_month: number;
+    exp_year: number;
   };
 
   if (!isPlatform && financialAccountId !== 'platform') {
@@ -121,6 +149,8 @@ export async function createVirtualCard(
     userId: user.id,
     cardId: card.id,
     last4: card.last4,
+    expMonth,
+    expYear,
   });
 
   return {
@@ -132,6 +162,19 @@ export async function createVirtualCard(
     expYear: card.exp_year,
     status: card.status,
   };
+}
+
+export async function cancelVirtualCard(
+  stripeCardId: string,
+  connectedAccountId: string | null,
+): Promise<void> {
+  const stripe = getStripe();
+  const options =
+    connectedAccountId && !connectedAccountId.startsWith('platform:')
+      ? { stripeAccount: connectedAccountId }
+      : undefined;
+
+  await stripe.issuing.cards.update(stripeCardId, { status: 'canceled' }, options);
 }
 
 export async function updateCardStatus(

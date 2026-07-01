@@ -1,6 +1,5 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import multer from 'multer';
 import type { Response } from 'express';
@@ -14,13 +13,15 @@ import {
   updateUserProfile,
 } from '../db.js';
 import { log } from '../logger.js';
+import { notifyAdminsKycSubmitted } from '../push/admin-notify.js';
 import { formatZodError } from '../zod-utils.js';
 import { WalletPhoneConflictError } from '../wallet/service.js';
 import { PhoneAlreadyInUseError } from '../phone.js';
+import { UPLOADS_DIR } from '../paths.js';
 import type { AuthedRequest } from './auth.js';
+import type { DeviceAuthedRequest } from '../middleware/device.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const uploadsDir = UPLOADS_DIR;
 
 mkdirSync(uploadsDir, { recursive: true });
 
@@ -101,8 +102,8 @@ export async function handleUploadDocument(
   }
 
   const side = req.query.side;
-  if (side !== 'front' && side !== 'back') {
-    res.status(400).json({ error: 'Invalid side. Use front or back.' });
+  if (side !== 'front' && side !== 'back' && side !== 'selfie') {
+    res.status(400).json({ error: 'Invalid side. Use front, back, or selfie.' });
     return;
   }
 
@@ -116,15 +117,17 @@ export async function handleUploadDocument(
   const update =
     side === 'front'
       ? { documentFrontUrl: url }
-      : { documentBackUrl: url };
+      : side === 'back'
+        ? { documentBackUrl: url }
+        : { selfieUrl: url };
 
   log('KYC document uploaded', { userId: req.userId, side, filename: file.filename });
 
   const updated = await updateUserProfile(req.userId!, update);
-  res.json({ url, user: toPublicUser(updated) });
+  res.json({ url, user: await toPublicUser(updated) });
 }
 
-export async function handleSubmitKyc(req: AuthedRequest, res: Response): Promise<void> {
+export async function handleSubmitKyc(req: DeviceAuthedRequest, res: Response): Promise<void> {
   log('KYC submit requested', { userId: req.userId, bodyKeys: Object.keys(req.body ?? {}) });
 
   const current = await findUserById(req.userId!);
@@ -169,8 +172,14 @@ export async function handleSubmitKyc(req: AuthedRequest, res: Response): Promis
   }
 
   try {
-    const user = await submitKycForReview(req.userId!, parsed.data);
-    res.json({ user: toPublicUser(user) });
+    const user = await submitKycForReview(req.userId!, parsed.data, req.deviceId);
+    void notifyAdminsKycSubmitted(user).catch((err) => {
+      log('KYC push notification failed', {
+        userId: user.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+    res.json({ user: await toPublicUser(user) });
   } catch (err) {
     if (err instanceof PhoneAlreadyInUseError || err instanceof WalletPhoneConflictError) {
       res.status(409).json({ error: err.message });
@@ -204,7 +213,7 @@ export async function handleUpdateDocumentType(
     const user = await updateUserProfile(req.userId!, {
       documentType: parsed.data.documentType,
     });
-    res.json({ user: toPublicUser(user) });
+    res.json({ user: await toPublicUser(user) });
   } catch (err) {
     res.status(403).json({
       error: err instanceof Error ? err.message : 'Cannot update document type',

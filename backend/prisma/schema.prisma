@@ -44,6 +44,7 @@ enum VirtualCardStatus {
 enum WalletTransactionType {
   DEPOSIT
   CARD_FUND
+  CARD_ISSUANCE
   ADJUSTMENT
 }
 
@@ -51,6 +52,70 @@ enum CardFundTransactionStatus {
   PENDING
   COMPLETED
   FAILED
+}
+
+enum AdminUserType {
+  OWNER
+  OPERATOR
+}
+
+enum AdminUserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum CatalogStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ServiceType {
+  INTERNAL
+  EXTERNAL
+  INTERNATIONAL
+}
+
+enum ServiceBehaviour {
+  TRANSACTIONAL
+  NON_TRANSACTIONAL
+}
+
+enum DenominationUnitType {
+  FLEX
+  FIXED
+}
+
+enum ProductUnitType {
+  MONETARY
+  NON_MONETARY
+}
+
+enum UcpUnit {
+  FEES
+  REWARD
+  SETTLEMENT
+  TAX
+  OTHER
+}
+
+enum UcpType {
+  FIXED
+  SLAB
+}
+
+enum UcpCalculationType {
+  INCLUSIVE
+  EXCLUSIVE
+}
+
+enum UcpSlabValueType {
+  PERCENT
+  FIXED_AMOUNT
+}
+
+enum KycReviewAction {
+  APPROVED
+  REJECTED
 }
 
 model User {
@@ -71,10 +136,15 @@ model User {
   documentType             String?                  @map("document_type")
   documentFrontUrl         String?                  @map("document_front_url")
   documentBackUrl          String?                  @map("document_back_url")
+  selfieUrl                String?                  @map("selfie_url")
   kycSubmittedAt           DateTime?                @map("kyc_submitted_at")
+  kycSubmittedDeviceId     String?                  @map("kyc_submitted_device_id")
   kycRejectionReason       String?                  @map("kyc_rejection_reason")
   cardTermsAcceptedAt      DateTime?                @map("card_terms_accepted_at")
   cardTermsAcceptedIp      String?                  @map("card_terms_accepted_ip")
+  cardIssuancePaidAt       DateTime?                @map("card_issuance_paid_at")
+  cardIssuanceFeeUsd       Float?                   @map("card_issuance_fee_usd")
+  cardIssuanceWalletTxId   String?                  @map("card_issuance_wallet_tx_id")
   stripeConnectedAccountId String?                  @unique @map("stripe_connected_account_id")
   stripeFinancialAccountId String?                  @map("stripe_financial_account_id")
   stripeProvisioningStatus StripeProvisioningStatus @default(NONE) @map("stripe_provisioning_status")
@@ -85,6 +155,13 @@ model User {
   directPayProvisioningError  String?                  @map("directpay_provisioning_error")
   simulatedBalanceUsd        Float                    @default(0) @map("simulated_balance_usd")
   stripeTestInboundPaymentMethod String?              @map("stripe_test_inbound_payment_method")
+  adminUser                Boolean                  @default(false) @map("admin_user")
+  adminUserType            AdminUserType?           @map("admin_user_type")
+  adminUserStatus          AdminUserStatus          @default(ACTIVE) @map("admin_user_status")
+  adminTotpSecret          String?                  @map("admin_totp_secret")
+  adminTotpEnabledAt       DateTime?                @map("admin_totp_enabled_at")
+  deviceLockEnabled        Boolean                  @default(false) @map("device_lock_enabled")
+  lockedDeviceId           String?                  @map("locked_device_id")
   createdAt                DateTime                 @default(now()) @map("created_at")
   updatedAt                DateTime                 @updatedAt @map("updated_at")
 
@@ -92,8 +169,189 @@ model User {
   fundingOrders        FundingOrder[]
   vpayWallet           VPayWallet?
   cardFundTransactions CardFundTransaction[]
+  adminPushSubscriptions AdminPushSubscription[]
+  adminRoles             UserRole[]
+  adminGroups            UserGroupMember[]
+  kycReviewsAsCustomer   KycReviewAudit[] @relation("KycReviewCustomer")
+  kycReviewsAsAdmin      KycReviewAudit[] @relation("KycReviewAdmin")
+  devices                UserDevice[]
+  kycSubmittedDevice     UserDevice?              @relation("KycSubmittedDevice", fields: [kycSubmittedDeviceId], references: [id], onDelete: SetNull)
+  lockedDevice           UserDevice?              @relation("LockedDevice", fields: [lockedDeviceId], references: [id], onDelete: SetNull)
+  monthlyDevices         UserMonthlyDevice[]
 
   @@map("users")
+}
+
+model UserDevice {
+  id            String   @id @default(uuid())
+  userId        String   @map("user_id")
+  fingerprint   String   @map("fingerprint")
+  deviceName    String?  @map("device_name")
+  brand         String?
+  manufacturer  String?
+  modelName     String?  @map("model_name")
+  deviceType    String?  @map("device_type")
+  osName        String?  @map("os_name")
+  osVersion     String?  @map("os_version")
+  imei          String?
+  hardwareId    String?  @map("hardware_id")
+  isEmulator    Boolean  @default(false) @map("is_emulator")
+  appVersion    String?  @map("app_version")
+  lastIpAddress String?  @map("last_ip_address")
+  lastSeenAt    DateTime @default(now()) @map("last_seen_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kycSubmissions       User[]                @relation("KycSubmittedDevice")
+  lockedByUsers        User[]                @relation("LockedDevice")
+  walletTransactions   WalletTransaction[]
+  cardFundTransactions CardFundTransaction[]
+  fundingOrders        FundingOrder[]
+
+  @@unique([userId, fingerprint])
+  @@index([userId, lastSeenAt])
+  @@map("user_devices")
+}
+
+model UserMonthlyDevice {
+  id             String   @id @default(uuid())
+  userId         String   @map("user_id")
+  deviceGroupKey String   @map("device_group_key")
+  yearMonth      String   @map("year_month")
+  firstLoginAt   DateTime @default(now()) @map("first_login_at")
+  lastLoginAt    DateTime @default(now()) @map("last_login_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceGroupKey, yearMonth])
+  @@index([userId, yearMonth])
+  @@map("user_monthly_devices")
+}
+
+model DeviceMonthlyUser {
+  id             String   @id @default(uuid())
+  deviceGroupKey String   @map("device_group_key")
+  userId         String   @map("user_id")
+  yearMonth      String   @map("year_month")
+  firstLoginAt   DateTime @default(now()) @map("first_login_at")
+  lastLoginAt    DateTime @default(now()) @map("last_login_at")
+
+  @@unique([deviceGroupKey, userId, yearMonth])
+  @@index([deviceGroupKey, yearMonth])
+  @@map("device_monthly_users")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  users       UserRole[]
+  groups      UserGroup[]
+  permissions RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("admin_roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  moduleKey   String           @map("module_key")
+  actionKey   String           @map("action_key")
+  name        String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@unique([moduleKey, actionKey])
+  @@map("admin_permissions")
+}
+
+model UserRole {
+  userId     String   @map("user_id")
+  roleId     String   @map("role_id")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  @@id([userId, roleId])
+  @@map("admin_user_roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime   @default(now()) @map("assigned_at")
+
+  @@id([roleId, permissionId])
+  @@map("admin_role_permissions")
+}
+
+model UserGroup {
+  id          String            @id @default(cuid())
+  name        String            @unique
+  description String?
+  roleId      String            @map("role_id")
+  role        Role              @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  members     UserGroupMember[]
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  @@map("admin_user_groups")
+}
+
+model UserGroupMember {
+  userId     String    @map("user_id")
+  groupId    String    @map("group_id")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group      UserGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  assignedAt DateTime  @default(now()) @map("assigned_at")
+
+  @@id([userId, groupId])
+  @@map("admin_user_group_members")
+}
+
+model AdminPushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique
+  p256dh    String   @map("p256dh")
+  auth      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("admin_push_subscriptions")
+}
+
+model KycReviewAudit {
+  id                String          @id @default(uuid())
+  customerUserId    String          @map("customer_user_id")
+  adminUserId       String?         @map("admin_user_id")
+  action            KycReviewAction
+  rejectionReason   String?         @map("rejection_reason")
+  customerEmail     String          @map("customer_email")
+  customerFirstName String?         @map("customer_first_name")
+  customerLastName  String?         @map("customer_last_name")
+  adminEmail        String          @map("admin_email")
+  adminFirstName    String?         @map("admin_first_name")
+  adminLastName     String?         @map("admin_last_name")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  customerUser User  @relation("KycReviewCustomer", fields: [customerUserId], references: [id], onDelete: Cascade)
+  adminUser    User? @relation("KycReviewAdmin", fields: [adminUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([customerUserId])
+  @@index([adminUserId])
+  @@index([action])
+  @@map("kyc_review_audits")
 }
 
 model VirtualCard {
@@ -119,6 +377,7 @@ model VirtualCard {
 model FundingOrder {
   id                       String             @id @default(uuid())
   userId                   String             @map("user_id")
+  deviceId                 String?            @map("device_id")
   amountGmd                Float              @map("amount_gmd")
   feeGmd                   Float              @map("fee_gmd")
   totalGmd                 Float              @map("total_gmd")
@@ -132,9 +391,11 @@ model FundingOrder {
   createdAt                DateTime           @default(now()) @map("created_at")
   updatedAt                DateTime           @updatedAt @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device UserDevice? @relation(fields: [deviceId], references: [id], onDelete: SetNull)
 
   @@index([userId])
+  @@index([deviceId])
   @@index([status])
   @@map("funding_orders")
 }
@@ -156,6 +417,7 @@ model VPayWallet {
 model WalletTransaction {
   id               String                @id @default(uuid())
   walletId         String                @map("wallet_id")
+  deviceId         String?               @map("device_id")
   type             WalletTransactionType
   amountGmd        Float                 @map("amount_gmd")
   balanceBeforeGmd Float                 @map("balance_before_gmd")
@@ -168,10 +430,12 @@ model WalletTransaction {
   metadata         Json?
   createdAt        DateTime              @default(now()) @map("created_at")
 
-  wallet            VPayWallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  wallet              VPayWallet           @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  device              UserDevice?          @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   cardFundTransaction CardFundTransaction?
 
   @@index([walletId, createdAt])
+  @@index([deviceId])
   @@index([referenceType, referenceId])
   @@map("wallet_transactions")
 }
@@ -179,6 +443,7 @@ model WalletTransaction {
 model CardFundTransaction {
   id                     String                    @id @default(uuid())
   userId                 String                    @map("user_id")
+  deviceId               String?                   @map("device_id")
   walletTransactionId    String                    @unique @map("wallet_transaction_id")
   amountGmd              Float                     @map("amount_gmd")
   amountUsd              Float                     @map("amount_usd")
@@ -193,9 +458,11 @@ model CardFundTransaction {
   createdAt              DateTime                  @default(now()) @map("created_at")
 
   user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device            UserDevice?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
   walletTransaction WalletTransaction @relation(fields: [walletTransactionId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([deviceId])
   @@map("card_fund_transactions")
 }
 
@@ -208,4 +475,127 @@ model OtpCode {
 
   @@index([email])
   @@map("otp_codes")
+}
+
+model Service {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  type        ServiceType
+  behaviour   ServiceBehaviour
+  status      CatalogStatus    @default(ACTIVE)
+  products    Product[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@map("services")
+}
+
+model Product {
+  id                   String               @id @default(cuid())
+  code                 String               @unique
+  name                 String
+  displayName          String               @map("display_name")
+  description          String?
+  serviceId            String               @map("service_id")
+  denominationUnitType DenominationUnitType @map("denomination_unit_type")
+  productUnitType      ProductUnitType      @map("product_unit_type")
+  startDate            DateTime?            @map("start_date")
+  expiryDate           DateTime?            @map("expiry_date")
+  currency             String
+  status               CatalogStatus        @default(ACTIVE)
+  service              Service              @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  settlementRequests   SettlementRequest[]
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  @@unique([serviceId, name])
+  @@index([serviceId])
+  @@map("products")
+}
+
+model Ucp {
+  id                                String              @id @default(cuid())
+  code                              String              @unique
+  name                              String              @unique
+  description                       String?
+  unit                              UcpUnit
+  ucpType                           UcpType             @map("ucp_type")
+  calculationType                   UcpCalculationType  @map("calculation_type")
+  allowDebitOnSuccessfulTransaction Boolean             @default(false) @map("allow_debit_on_successful_transaction")
+  startDate                         DateTime?           @map("start_date")
+  expiryDate                        DateTime?           @map("expiry_date")
+  minValue                          Float?              @map("min_value")
+  maxValue                          Float?              @map("max_value")
+  fixedValue                        Float?              @map("fixed_value")
+  status                            CatalogStatus       @default(ACTIVE)
+  slabs                             UcpSlab[]
+  settlementRequests                SettlementRequest[]
+  createdAt                         DateTime            @default(now()) @map("created_at")
+  updatedAt                         DateTime            @updatedAt @map("updated_at")
+
+  @@map("ucps")
+}
+
+model UcpSlab {
+  id        String           @id @default(cuid())
+  ucpId     String           @map("ucp_id")
+  minAmount Float            @map("min_amount")
+  maxAmount Float?           @map("max_amount")
+  value     Float
+  valueType UcpSlabValueType @map("value_type")
+  sortOrder Int              @default(0) @map("sort_order")
+  ucp       Ucp              @relation(fields: [ucpId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  @@index([ucpId])
+  @@map("ucp_slabs")
+}
+
+model SettlementRequest {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  productId   String        @map("product_id")
+  ucpId       String        @map("ucp_id")
+  priority    Int           @default(0)
+  startDate   DateTime?     @map("start_date")
+  expiryDate  DateTime?     @map("expiry_date")
+  status      CatalogStatus @default(ACTIVE)
+  product     Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  ucp         Ucp           @relation(fields: [ucpId], references: [id], onDelete: Restrict)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@unique([productId, ucpId])
+  @@index([productId])
+  @@index([ucpId])
+  @@map("settlement_requests")
+}
+
+enum ExchangeRateSyncStatus {
+  SUCCESS
+  FAILED
+}
+
+model ExchangeRateSnapshot {
+  id                 String                 @id @default(cuid())
+  status             ExchangeRateSyncStatus
+  rate               Float?
+  baseCurrency       String                 @map("base_currency")
+  targetCurrency     String                 @map("target_currency")
+  requestedAt        DateTime               @map("requested_at")
+  respondedAt        DateTime?              @map("responded_at")
+  sourceUpdatedAtUtc DateTime?              @map("source_updated_at_utc")
+  httpStatus         Int?                   @map("http_status")
+  catalogUpdated     Boolean                @default(false) @map("catalog_updated")
+  previousRate       Float?                 @map("previous_rate")
+  errorMessage       String?                @map("error_message")
+  createdAt          DateTime               @default(now()) @map("created_at")
+
+  @@index([requestedAt])
+  @@index([status, requestedAt])
+  @@index([targetCurrency, requestedAt])
+  @@map("exchange_rate_snapshots")
 }

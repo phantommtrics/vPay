@@ -4,7 +4,7 @@ import { CardFundTransactionStatus, StripeProvisioningStatus } from '@prisma/cli
 import { z } from 'zod';
 
 import { prisma } from '../db.js';
-import { getFundConfig } from '../fund-config.js';
+import { getFundConfigAsync } from '../fund-config.js';
 import { log } from '../logger.js';
 import { creditCardBalanceUsd, getCardBalanceUsdForUser } from '../stripe/card-balance.js';
 import {
@@ -16,6 +16,7 @@ import {
 } from '../wallet/service.js';
 import { WalletTransactionType } from '@prisma/client';
 import type { AuthedRequest } from './auth.js';
+import type { DeviceAuthedRequest } from '../middleware/device.js';
 
 const fundCardSchema = z.object({
   amountGmd: z.number().positive(),
@@ -58,7 +59,7 @@ export async function handleGetCardFundBalance(req: AuthedRequest, res: Response
       return;
     }
 
-    const { exchangeRate } = getFundConfig();
+    const { exchangeRate } = await getFundConfigAsync();
     let wallet = null;
     try {
       wallet = await getWalletBalance(userId);
@@ -83,7 +84,7 @@ export async function handleGetCardFundBalance(req: AuthedRequest, res: Response
   }
 }
 
-export async function handleFundCard(req: AuthedRequest, res: Response): Promise<void> {
+export async function handleFundCard(req: DeviceAuthedRequest, res: Response): Promise<void> {
   try {
     const parsed = fundCardSchema.safeParse(req.body);
     if (!parsed.success) {
@@ -108,7 +109,7 @@ export async function handleFundCard(req: AuthedRequest, res: Response): Promise
       return;
     }
 
-    const { exchangeRate } = getFundConfig();
+    const { exchangeRate } = await getFundConfigAsync();
     const amountUsd = amountGmd / exchangeRate;
 
     const before = await getCardBalanceUsdForUser(user);
@@ -122,6 +123,7 @@ export async function handleFundCard(req: AuthedRequest, res: Response): Promise
         userId,
         amountGmd,
         type: WalletTransactionType.CARD_FUND,
+        deviceId: req.deviceId,
         referenceType: 'card_fund',
         referenceId: cardFundId,
         description: 'Card funding',
@@ -147,6 +149,7 @@ export async function handleFundCard(req: AuthedRequest, res: Response): Promise
         userId,
         amountGmd,
         type: WalletTransactionType.ADJUSTMENT,
+        deviceId: req.deviceId,
         referenceType: 'card_fund_reversal',
         referenceId: cardFundId,
         description: 'Card funding refund — could not credit your card',
@@ -156,6 +159,7 @@ export async function handleFundCard(req: AuthedRequest, res: Response): Promise
         data: {
           id: cardFundId,
           userId,
+          deviceId: req.deviceId,
           walletTransactionId: walletTx.id,
           amountGmd,
           amountUsd,
@@ -185,6 +189,7 @@ export async function handleFundCard(req: AuthedRequest, res: Response): Promise
       data: {
         id: cardFundId,
         userId,
+        deviceId: req.deviceId,
         walletTransactionId: walletTx.id,
         amountGmd,
         amountUsd,

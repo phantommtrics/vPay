@@ -21,6 +21,8 @@ type DocumentUploadProps = {
   required?: boolean;
   value: string | null;
   disabled?: boolean;
+  cameraFacing?: 'front' | 'back';
+  primaryAction?: 'camera' | 'gallery';
   onUpload: (uri: string) => Promise<void>;
   onRemove?: () => void;
 };
@@ -31,6 +33,8 @@ export function DocumentUpload({
   required,
   value,
   disabled,
+  cameraFacing = 'back',
+  primaryAction = 'gallery',
   onUpload,
   onRemove,
 }: DocumentUploadProps) {
@@ -77,6 +81,10 @@ export function DocumentUpload({
             mediaTypes: ['images'],
             quality: 0.85,
             allowsEditing: true,
+            cameraType:
+              cameraFacing === 'front'
+                ? ImagePicker.CameraType.front
+                : ImagePicker.CameraType.back,
           })
         : ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
@@ -151,16 +159,24 @@ export function DocumentUpload({
         <View style={[styles.uploadBox, disabled && styles.uploadDisabled]}>
           <Pressable
             style={styles.uploadMain}
-            onPress={() => pickImage(false)}
+            onPress={() => pickImage(primaryAction === 'camera')}
             disabled={disabled || loading}>
             {loading ? (
               <ActivityIndicator color={colors.emerald600} />
             ) : (
               <>
                 <View style={styles.uploadIcon}>
-                  <ImagePlus size={24} color={colors.emerald600} />
+                  {primaryAction === 'camera' ? (
+                    <Camera size={24} color={colors.emerald600} />
+                  ) : (
+                    <ImagePlus size={24} color={colors.emerald600} />
+                  )}
                 </View>
-                <Text style={styles.uploadTitle}>Tap to choose from gallery</Text>
+                <Text style={styles.uploadTitle}>
+                  {primaryAction === 'camera'
+                    ? 'Tap to take a photo with your camera'
+                    : 'Tap to choose from gallery'}
+                </Text>
               </>
             )}
           </Pressable>

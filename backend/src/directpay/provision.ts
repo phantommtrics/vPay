@@ -4,6 +4,30 @@ import { prisma } from '../db.js';
 import { log } from '../logger.js';
 import { getDirectPayPartnerConfig, provisionDirectPayTenant } from './partner.js';
 
+export class DirectPayMerchantAlreadyProvisionedError extends Error {
+  readonly holderEmail: string;
+
+  constructor(holderEmail: string) {
+    super(`directPay merchant already linked to ${holderEmail}`);
+    this.name = 'DirectPayMerchantAlreadyProvisionedError';
+    this.holderEmail = holderEmail;
+  }
+}
+
+async function assertDirectPayMerchantAvailable(userId: string): Promise<void> {
+  const existingMerchant = await prisma.user.findFirst({
+    where: {
+      directPayBusinessId: { not: null },
+      id: { not: userId },
+    },
+    select: { email: true },
+  });
+
+  if (existingMerchant) {
+    throw new DirectPayMerchantAlreadyProvisionedError(existingMerchant.email);
+  }
+}
+
 function slugHint(userId: string, email: string): string {
   const local = (email || '').split('@')[0] || 'user';
   const safe = local.replace(/[^a-zA-Z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 24);
@@ -56,6 +80,8 @@ export async function provisionUserDirectPayMerchant(userId: string): Promise<vo
     });
     return;
   }
+
+  await assertDirectPayMerchantAvailable(userId);
 
   try {
     await prisma.user.update({

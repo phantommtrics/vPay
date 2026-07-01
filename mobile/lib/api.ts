@@ -1,11 +1,14 @@
 import { API_URL } from './config';
 import { getToken } from './auth-storage';
+import { getRegisteredDeviceId } from './device-storage';
+import type { DeviceInfoPayload } from './device-info';
 import type {
   CardFundTransactionSummary,
   CardsResponse,
   DocumentType,
   FundPrepareResponse,
   FundWalletCheckoutResponse,
+  CardIssuancePayResponse,
   FundingOrderSummary,
   KycSubmitPayload,
   ProfileUpdate,
@@ -40,6 +43,10 @@ async function request<T>(
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
+    const deviceId = await getRegisteredDeviceId();
+    if (deviceId) {
+      headers['X-Device-Id'] = deviceId;
+    }
   }
 
   let response: Response;
@@ -66,10 +73,13 @@ async function request<T>(
 
 export { ApiError };
 
-export async function sendOtp(email: string): Promise<void> {
-  await request('/api/auth/send-otp', {
+export async function sendOtp(
+  email: string,
+  device?: DeviceInfoPayload,
+): Promise<{ accountDeviceLocked?: boolean }> {
+  return request('/api/auth/send-otp', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, device }),
     auth: false,
   });
 }
@@ -77,11 +87,31 @@ export async function sendOtp(email: string): Promise<void> {
 export async function verifyOtp(
   email: string,
   code: string,
-): Promise<{ token: string; user: User }> {
+  device?: DeviceInfoPayload,
+): Promise<{ token: string; user: User; device: { id: string } | null }> {
   return request('/api/auth/verify-otp', {
     method: 'POST',
-    body: JSON.stringify({ email, code }),
+    body: JSON.stringify({ email, code, device }),
     auth: false,
+  });
+}
+
+export async function registerDevice(
+  device: DeviceInfoPayload,
+): Promise<{ device: { id: string } }> {
+  return request('/api/auth/register-device', {
+    method: 'POST',
+    body: JSON.stringify(device),
+  });
+}
+
+export async function updateDeviceLock(
+  enabled: boolean,
+  device?: DeviceInfoPayload,
+): Promise<{ user: User; device?: { id: string } }> {
+  return request('/api/auth/device-lock', {
+    method: 'PATCH',
+    body: JSON.stringify({ enabled, device }),
   });
 }
 
@@ -99,7 +129,7 @@ export async function updateProfile(fields: ProfileUpdate): Promise<User> {
 }
 
 export async function uploadKycDocument(
-  side: 'front' | 'back',
+  side: 'front' | 'back' | 'selfie',
   uri: string,
 ): Promise<User> {
   const token = await getToken();
@@ -238,6 +268,10 @@ export async function getCardFundTransactions(params?: {
   if (params?.limit) search.set('limit', String(params.limit));
   const query = search.toString();
   return request(`/api/card-fund/transactions${query ? `?${query}` : ''}`);
+}
+
+export async function payCardIssuance(): Promise<CardIssuancePayResponse> {
+  return request('/api/card-issuance/pay', { method: 'POST' });
 }
 
 export async function getFundingOrder(fundingId: string): Promise<{ funding: FundingOrderSummary }> {

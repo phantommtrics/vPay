@@ -22,7 +22,8 @@ import { VirtualCard } from '@/components/VirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCardActivity } from '@/hooks/useCardActivity';
 import { useCards } from '@/hooks/useCards';
-import { getUserDisplayName, getUserInitials, hasDisplayName } from '@/lib/api';
+import { ApiError, getUserDisplayName, getUserInitials, hasDisplayName, payCardIssuance } from '@/lib/api';
+import { formatGmd } from '@/lib/currency';
 import { colors, radius, spacing } from '@/constants/theme';
 import { sanitizeUserFacingText } from '@/lib/user-facing-text';
 
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const {
     primaryCard,
     provisioning,
+    issuance,
     stripePublishableKey,
     stripeConnectedAccountId,
     loading: cardsLoading,
@@ -47,6 +49,8 @@ export default function HomeScreen() {
     refresh: refreshActivity,
   } = useCardActivity(Boolean(user?.kycComplete));
   const [refreshingUser, setRefreshingUser] = useState(false);
+  const [issuingCard, setIssuingCard] = useState(false);
+  const [issuanceError, setIssuanceError] = useState('');
 
   const refreshing = refreshingUser || cardsRefreshing || activityRefreshing;
 
@@ -62,6 +66,36 @@ export default function HomeScreen() {
       setRefreshingUser(false);
     }
   }, [refreshUser, refresh, refreshActivity, user?.kycComplete]);
+
+  const hasActiveCard = Boolean(primaryCard && !primaryCard.expired);
+
+  const showIssueCardCta =
+    user?.kycComplete &&
+    !hasActiveCard &&
+    provisioning.status !== 'pending' &&
+    issuance.required &&
+    (!issuance.paid || issuance.canReissue);
+
+  const issueCardLabel = issuance.canReissue ? 'Reissue card' : 'Issue card';
+
+  const handleIssueCard = async () => {
+    setIssuanceError('');
+    setIssuingCard(true);
+    try {
+      await payCardIssuance();
+      await refresh();
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'Could not issue card';
+      setIssuanceError(message);
+    } finally {
+      setIssuingCard(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -106,7 +140,7 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
-      {user.kycComplete && provisioning.status === 'pending' && !primaryCard ? (
+      {user.kycComplete && provisioning.status === 'pending' && !hasActiveCard ? (
         <Pressable style={styles.provisioningBanner} onPress={() => void refresh()}>
           <ActivityIndicator color={colors.emerald600} />
           <View style={styles.verifyContent}>
@@ -147,17 +181,58 @@ export default function HomeScreen() {
           <ActivityIndicator color={colors.emerald600} />
         </View>
       ) : primaryCard ? (
-        <VirtualCard
-          card={primaryCard}
-          stripePublishableKey={stripePublishableKey}
-          stripeConnectedAccountId={stripeConnectedAccountId}
-        />
+        <View style={styles.cardSection}>
+          <VirtualCard
+            card={primaryCard}
+            stripePublishableKey={stripePublishableKey}
+            stripeConnectedAccountId={stripeConnectedAccountId}
+          />
+          {primaryCard.expired && showIssueCardCta ? (
+            <View style={styles.reissuePanel}>
+              <Text style={styles.reissueBody}>
+                This card expired. Reissue for {formatGmd(issuance.feeGmd)} (
+                {issuance.feeUsd.toFixed(2)} USD) from your wallet.
+              </Text>
+              {issuanceError ? <Text style={styles.issuanceError}>{issuanceError}</Text> : null}
+              <Pressable
+                style={[styles.issueCardButton, issuingCard && styles.issueCardButtonDisabled]}
+                disabled={issuingCard}
+                onPress={() => void handleIssueCard()}>
+                {issuingCard ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.issueCardButtonText}>
+                    {issueCardLabel} · {formatGmd(issuance.feeGmd)}
+                  </Text>
+                )}
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       ) : user.kycComplete ? (
         <View style={styles.emptyCard}>
           <Text style={styles.emptyCardTitle}>No card yet</Text>
           <Text style={styles.emptyCardBody}>
-            {cardsError ?? 'Your virtual card will appear here once provisioning completes.'}
+            {cardsError ??
+              (showIssueCardCta
+                ? `${issueCardLabel} for ${formatGmd(issuance.feeGmd)} (${issuance.feeUsd.toFixed(2)} USD) from your wallet.`
+                : 'Your virtual card will appear here once provisioning completes.')}
           </Text>
+          {issuanceError ? <Text style={styles.issuanceError}>{issuanceError}</Text> : null}
+          {showIssueCardCta ? (
+            <Pressable
+              style={[styles.issueCardButton, issuingCard && styles.issueCardButtonDisabled]}
+              disabled={issuingCard}
+              onPress={() => void handleIssueCard()}>
+              {issuingCard ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.issueCardButtonText}>
+                  {issueCardLabel} · {formatGmd(issuance.feeGmd)}
+                </Text>
+              )}
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <View style={styles.emptyCard}>
@@ -370,6 +445,23 @@ const styles = StyleSheet.create({
     padding: 24,
     gap: 8,
   },
+  cardSection: {
+    gap: 16,
+  },
+  reissuePanel: {
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.amber100,
+    padding: 16,
+    gap: 12,
+  },
+  reissueBody: {
+    fontSize: 14,
+    color: colors.gray600,
+    lineHeight: 20,
+    fontFamily: 'Inter_400Regular',
+  },
   emptyCardTitle: {
     fontSize: 18,
     fontWeight: '700',
@@ -382,6 +474,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontFamily: 'Inter_400Regular',
+  },
+  issuanceError: {
+    fontSize: 13,
+    color: colors.red500,
+    textAlign: 'center',
+    fontFamily: 'Inter_500Medium',
+  },
+  issueCardButton: {
+    marginTop: 8,
+    backgroundColor: colors.emerald600,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  issueCardButtonDisabled: {
+    opacity: 0.7,
+  },
+  issueCardButtonText: {
+    color: colors.white,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: 'Inter_700Bold',
   },
   actions: {
     flexDirection: 'row',

@@ -16,7 +16,8 @@ import {
   mergePaymentSourceMetadata,
   type FundingOrderMetadata,
 } from '../fund-metadata.js';
-import { getFundConfig, isFundSimulationEnabled, toUserFacingFundError } from '../fund-config.js';
+import { getFundConfigAsync, isFundSimulationEnabled, toUserFacingFundError } from '../fund-config.js';
+import { calculateWalletTopupFee } from '../settlement/platform-config.js';
 import {
   creditWalletFromFundingOrder,
   ensureWalletForUser,
@@ -27,6 +28,7 @@ import {
 } from '../wallet/service.js';
 import { PhoneAlreadyInUseError } from '../phone.js';
 import type { AuthedRequest } from './auth.js';
+import type { DeviceAuthedRequest } from '../middleware/device.js';
 
 const SIMULATED_WALLETS = [
   {
@@ -46,7 +48,7 @@ const SIMULATED_WALLETS = [
 ] as const;
 
 export async function handleGetFundConfig(_req: AuthedRequest, res: Response): Promise<void> {
-  res.json(getFundConfig());
+  res.json(await getFundConfigAsync());
 }
 
 const prepareSchema = z.object({
@@ -100,7 +102,7 @@ function toPublicFundingOrder(order: FundingOrder) {
   };
 }
 
-export async function handlePrepareFund(req: AuthedRequest, res: Response): Promise<void> {
+export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response): Promise<void> {
   try {
     const simulation = isFundSimulationEnabled();
     if (!simulation && !getDirectPayPartnerConfig().configured) {
@@ -125,10 +127,9 @@ export async function handlePrepareFund(req: AuthedRequest, res: Response): Prom
       return;
     }
 
-    const { exchangeRate, feePercent } = getFundConfig();
+    const { exchangeRate } = await getFundConfigAsync();
     const amountGmd = parsed.data.amountGmd;
-    const feeGmd = amountGmd * feePercent;
-    const totalGmd = amountGmd + feeGmd;
+    const { feeGmd, totalGmd, feePercent } = await calculateWalletTopupFee(amountGmd);
     const usdEstimate = amountGmd / exchangeRate;
 
     if (simulation) {
@@ -158,6 +159,7 @@ export async function handlePrepareFund(req: AuthedRequest, res: Response): Prom
       const fundingOrder = await prisma.fundingOrder.create({
         data: {
           userId,
+          deviceId: req.deviceId,
           amountGmd,
           feeGmd,
           totalGmd,
@@ -212,6 +214,7 @@ export async function handlePrepareFund(req: AuthedRequest, res: Response): Prom
     const fundingOrder = await prisma.fundingOrder.create({
       data: {
         userId,
+        deviceId: req.deviceId,
         amountGmd,
         feeGmd,
         totalGmd,

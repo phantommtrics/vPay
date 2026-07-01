@@ -10,6 +10,7 @@ import {
   normalizePhoneE164,
   parseDateOfBirth,
   resolveCountryCode,
+  usesLegacyBillingSandbox,
 } from './mappers.js';
 
 type V2Account = {
@@ -86,6 +87,14 @@ async function createPlatformCardholderOnly(user: User): Promise<string> {
   const countryCode = resolveCountryCode(user);
   const dob = parseDateOfBirth(user.dateOfBirth!);
   const billing = buildBillingAddress(user);
+
+  if (usesLegacyBillingSandbox(user)) {
+    log('Legacy Issuing sandbox: remapped cardholder billing country', {
+      userId: user.id,
+      userCountry: countryCode,
+      billingCountry: billing.country,
+    });
+  }
 
   const cardholder = await stripe.issuing.cardholders.create({
     type: 'individual',

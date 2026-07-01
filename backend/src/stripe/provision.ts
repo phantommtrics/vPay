@@ -1,16 +1,20 @@
 import { StripeProvisioningStatus, VirtualCardStatus, type User } from '@prisma/client';
 
+import { isVirtualCardActive } from '../card-expiry.js';
 import { prisma } from '../db.js';
 import { sendCardReadyEmail } from '../email.js';
 import { log } from '../logger.js';
 import { isStripeConfigured, getIssuingCurrency } from './client.js';
+import { getCardIssuanceConfigAsync } from '../fund-config.js';
 import { assertProvisioningReady } from './mappers.js';
+import { refundCardIssuanceFee } from '../wallet/service.js';
 import {
   createConnectedAccount,
   createFinancialAccount,
   waitForAccountCapabilities,
 } from './connect.js';
 import {
+  cancelVirtualCard,
   createCardholder,
   createVirtualCard,
   enableIssuingProgram,
@@ -27,7 +31,15 @@ function toCardStatus(status: 'active' | 'inactive' | 'canceled'): VirtualCardSt
   }
 }
 
-export async function provisionUserCard(userId: string): Promise<void> {
+export type ProvisionUserCardOptions = {
+  /** Admin scripts can skip the wallet issuance fee gate. */
+  skipIssuanceFeeCheck?: boolean;
+};
+
+export async function provisionUserCard(
+  userId: string,
+  options: ProvisionUserCardOptions = {},
+): Promise<void> {
   if (!isStripeConfigured()) {
     await prisma.user.update({
       where: { id: userId },
@@ -48,14 +60,28 @@ export async function provisionUserCard(userId: string): Promise<void> {
     throw new Error('KYC must be approved before card provisioning');
   }
 
-  const existingCard = await prisma.virtualCard.findFirst({ where: { userId } });
-  if (existingCard) {
+  const issuanceConfig = await getCardIssuanceConfigAsync();
+  if (
+    issuanceConfig.required &&
+    !user.cardIssuancePaidAt &&
+    !options.skipIssuanceFeeCheck
+  ) {
+    throw new Error('Card issuance fee must be paid before provisioning');
+  }
+
+  const existingCard = await prisma.virtualCard.findFirst({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (existingCard && isVirtualCardActive(existingCard)) {
     await prisma.user.update({
       where: { id: userId },
       data: { stripeProvisioningStatus: StripeProvisioningStatus.ACTIVE },
     });
     return;
   }
+
+  const expiredCard = existingCard && !isVirtualCardActive(existingCard) ? existingCard : null;
 
   let currentUser = user;
 
@@ -105,7 +131,25 @@ export async function provisionUserCard(userId: string): Promise<void> {
 
     await enableIssuingProgram(connectedAccountId);
 
-    const cardholderId = await createCardholder(currentUser, connectedAccountId);
+    if (expiredCard && expiredCard.status !== VirtualCardStatus.CANCELED) {
+      try {
+        await cancelVirtualCard(expiredCard.stripeCardId, connectedAccountId);
+      } catch (err) {
+        log('Failed to cancel expired Stripe card before reissue', {
+          userId,
+          cardId: expiredCard.stripeCardId,
+          error: err instanceof Error ? err.message : 'unknown',
+        });
+      }
+      await prisma.virtualCard.update({
+        where: { id: expiredCard.id },
+        data: { status: VirtualCardStatus.CANCELED },
+      });
+    }
+
+    const cardholderId =
+      expiredCard?.stripeCardholderId ??
+      (await createCardholder(currentUser, connectedAccountId));
     const issued = await createVirtualCard(
       currentUser,
       connectedAccountId,
@@ -154,11 +198,15 @@ export async function provisionUserCard(userId: string): Promise<void> {
     const message = err instanceof Error ? err.message : 'Unknown provisioning error';
     log('Card provisioning failed', { userId, error: message });
 
+    const refunded = await refundCardIssuanceFee(userId);
+
     await prisma.user.update({
       where: { id: userId },
       data: {
         stripeProvisioningStatus: StripeProvisioningStatus.FAILED,
-        stripeProvisioningError: message,
+        stripeProvisioningError: refunded
+          ? `${message} Your wallet has been refunded.`
+          : message,
       },
     });
   }

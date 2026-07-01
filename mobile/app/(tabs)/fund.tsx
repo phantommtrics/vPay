@@ -32,7 +32,12 @@ import {
 } from '@/lib/api';
 import { fundingSources } from '@/lib/data';
 import { formatGmd } from '@/lib/currency';
-import { formatFundFeeLabel, type FundConfig } from '@/lib/fund-config';
+import {
+  estimateWalletTopupFee,
+  formatWalletTopupFeeLabel,
+  type FundConfig,
+  type WalletTopupFeePricing,
+} from '@/lib/fund-config';
 import { toFriendlyFundError } from '@/lib/fund-errors';
 import type { CheckoutWallet, FundPrepareResponse } from '@/lib/types';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -100,14 +105,24 @@ export default function FundScreen() {
   }, [clearApsSession]);
 
   const exchangeRate = pendingPrepare?.exchangeRate ?? fundConfig?.exchangeRate;
-  const feePercent = pendingPrepare?.feePercent ?? fundConfig?.feePercent;
-  const simulationEnabled = fundConfig?.simulationEnabled ?? pendingPrepare?.simulationEnabled ?? false;
-  const feeLabel = feePercent !== undefined ? formatFundFeeLabel(feePercent) : '—';
-
   const numAmount = parseFloat(amount) || 0;
+  const walletTopupFee: WalletTopupFeePricing | undefined =
+    fundConfig?.walletTopupFee ??
+    (fundConfig?.feePercent != null ? { type: 'fixed', feePercent: fundConfig.feePercent } : undefined);
+  const simulationEnabled = fundConfig?.simulationEnabled ?? pendingPrepare?.simulationEnabled ?? false;
+  const feeLabel =
+    pendingPrepare != null && pendingPrepare.funding.amountGmd > 0
+      ? formatWalletTopupFeeLabel(
+          walletTopupFee ?? { type: 'fixed', feePercent: pendingPrepare.feePercent },
+          pendingPrepare.funding.amountGmd,
+        )
+      : walletTopupFee
+        ? formatWalletTopupFeeLabel(walletTopupFee, numAmount)
+        : '—';
+
   const fee =
     pendingPrepare?.funding.feeGmd ??
-    (feePercent !== undefined ? numAmount * feePercent : undefined);
+    (walletTopupFee && numAmount > 0 ? estimateWalletTopupFee(walletTopupFee, numAmount) : undefined);
   const totalGMD =
     pendingPrepare?.funding.totalGmd ??
     (fee !== undefined ? numAmount + fee : undefined);

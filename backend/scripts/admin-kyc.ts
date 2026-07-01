@@ -1,29 +1,46 @@
 import 'dotenv/config';
 
 import { approveKyc, findUserByEmail, findUserById, rejectKyc, toPublicUser } from '../src/db.js';
-import { provisionUserDirectPayMerchant } from '../src/directpay/provision.js';
-import { ensureLegacyProvisioningFields } from '../src/stripe/mappers.js';
-import { provisionUserCard } from '../src/stripe/provision.js';
+import {
+  DirectPayMerchantAlreadyProvisionedError,
+  provisionUserDirectPayMerchant,
+} from '../src/directpay/provision.js';
+import {
+  adminProvisionUserCard,
+  AdminProvisionCardError,
+} from '../src/stripe/admin-provision.js';
 
 function usage(): never {
   console.log(`Usage:
-  npm run admin:approve -- <email>              Approve KYC only
+  npm run admin:approve -- <email>                    Approve KYC only
   npm run admin:reject -- <email> [reason]
-  npm run admin:provision -- <email>            Provision Stripe card (KYC must be approved)
-  npm run admin:provision-directpay -- <email>  Provision directPay merchant (KYC must be approved)
+  npm run admin:provision -- <email> [--charge]       Provision Stripe card (free by default)
+  npm run admin:provision-directpay -- <email>          Provision directPay merchant (KYC must be approved)
+
+Options:
+  --charge    Debit the user's vPay wallet for the issuance fee before provisioning
 
 Examples:
   npm run admin:approve -- modou@example.com
   npm run admin:reject -- modou@example.com "Document image is unclear"
   npm run admin:provision -- modou@example.com
+  npm run admin:provision -- modou@example.com --charge
   npm run admin:provision-directpay -- modou@example.com
 `);
   process.exit(1);
 }
 
-async function runDirectPayProvisioning(userId: string, email: string): Promise<void> {
+async function runDirectPayProvisioning(userId: string, _email: string): Promise<void> {
   console.log('Provisioning directPay merchant…');
-  await provisionUserDirectPayMerchant(userId);
+  try {
+    await provisionUserDirectPayMerchant(userId);
+  } catch (e) {
+    if (e instanceof DirectPayMerchantAlreadyProvisionedError) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e;
+  }
 
   const refreshed = await findUserById(userId);
   if (!refreshed) {
@@ -43,39 +60,40 @@ async function runDirectPayProvisioning(userId: string, email: string): Promise<
   }
 }
 
-async function runProvisioning(userId: string, email: string): Promise<void> {
-  let user = await findUserById(userId);
-  if (!user) {
-    console.error('User not found after approval');
-    process.exit(1);
-  }
+async function runProvisioning(userId: string, chargeFee: boolean): Promise<void> {
+  const mode = chargeFee ? 'charged' : 'free';
+  console.log(`Provisioning card (${mode})…`);
 
-  user = await ensureLegacyProvisioningFields(user);
-  if (
-    user.postalCode === '00000' ||
-    user.countryCode ||
-    user.cardTermsAcceptedAt
-  ) {
-    console.log('Ensured legacy KYC fields required for Stripe provisioning.');
-  }
+  try {
+    const result = await adminProvisionUserCard(userId, { chargeFee });
+    const status = result.provisioning.status;
 
-  console.log('Provisioning card…');
-  await provisionUserCard(user.id);
+    if (chargeFee && result.charged) {
+      console.log(`Issuance fee charged: ${result.feeGmd} GMD (${result.feeUsd} USD)`);
+    } else if (result.feeWaived) {
+      console.log('Issuance fee waived.');
+    }
 
-  const refreshed = await findUserById(user.id);
-  if (!refreshed) {
-    process.exit(1);
+    if (status === 'active') {
+      console.log('Card provisioning succeeded.');
+    } else if (status === 'failed') {
+      console.error(`Card provisioning failed: ${result.provisioning.error ?? 'unknown error'}`);
+      process.exit(1);
+    } else {
+      console.log(`Provisioning status: ${status}`);
+    }
+  } catch (e) {
+    if (e instanceof AdminProvisionCardError) {
+      console.error(e.message);
+      process.exit(1);
+    }
+    throw e;
   }
+}
 
-  const status = refreshed.stripeProvisioningStatus.toLowerCase();
-  if (status === 'active') {
-    console.log('Card provisioning succeeded.');
-  } else if (status === 'failed') {
-    console.error(`Card provisioning failed: ${refreshed.stripeProvisioningError ?? 'unknown error'}`);
-    process.exit(1);
-  } else {
-    console.log(`Provisioning status: ${status}`);
-  }
+function parseProvisionArgs(rest: string[]): { chargeFee: boolean } {
+  const chargeFee = rest.includes('--charge');
+  return { chargeFee };
 }
 
 async function main(): Promise<void> {
@@ -107,7 +125,8 @@ async function main(): Promise<void> {
       console.error('User must be KYC-approved before provisioning. Run admin:approve first.');
       process.exit(1);
     }
-    await runProvisioning(user.id, normalizedEmail);
+    const { chargeFee } = parseProvisionArgs(rest);
+    await runProvisioning(user.id, chargeFee);
     return;
   }
 
@@ -131,6 +150,7 @@ async function main(): Promise<void> {
     console.log('');
     console.log('Next steps (optional):');
     console.log(`  npm run admin:provision -- ${normalizedEmail}`);
+    console.log(`  npm run admin:provision -- ${normalizedEmail} --charge`);
     console.log(`  npm run admin:provision-directpay -- ${normalizedEmail}`);
     return;
   }

@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 import * as api from '@/lib/api';
 import { clearToken, getToken, setToken } from '@/lib/auth-storage';
+import { collectDeviceInfo } from '@/lib/device-info';
+import { clearRegisteredDeviceId, setRegisteredDeviceId } from '@/lib/device-storage';
 import { markSkipNextAppLock } from '@/lib/app-lock-storage';
 import type { KycSubmitPayload, ProfileUpdate, User } from '@/lib/types';
 
@@ -12,11 +14,26 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (fields: ProfileUpdate) => Promise<void>;
-  uploadKycDocument: (side: 'front' | 'back', uri: string) => Promise<void>;
+  uploadKycDocument: (side: 'front' | 'back' | 'selfie', uri: string) => Promise<void>;
   submitKyc: (payload: KycSubmitPayload) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+
+async function syncRegisteredDevice(): Promise<void> {
+  const token = await getToken();
+  if (!token) {
+    return;
+  }
+
+  try {
+    const deviceInfo = await collectDeviceInfo();
+    const { device } = await api.registerDevice(deviceInfo);
+    await setRegisteredDeviceId(device.id);
+  } catch (error) {
+    console.warn('Failed to register device', error);
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -32,8 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const me = await api.fetchMe();
       setUser(me);
+      await syncRegisteredDevice();
     } catch {
       await clearToken();
+      await clearRegisteredDeviceId();
       setUser(null);
     }
   }, []);
@@ -63,14 +82,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshUser]);
 
   const signIn = useCallback(async (email: string, code: string) => {
-    const { token, user: signedInUser } = await api.verifyOtp(email, code);
+    const deviceInfo = await collectDeviceInfo();
+    const { token, user: signedInUser, device } = await api.verifyOtp(email, code, deviceInfo);
     await setToken(token);
+    if (device?.id) {
+      await setRegisteredDeviceId(device.id);
+    }
     markSkipNextAppLock();
     setUser(signedInUser);
   }, []);
 
   const signOut = useCallback(async () => {
     await clearToken();
+    await clearRegisteredDeviceId();
     setUser(null);
   }, []);
 
@@ -79,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
-  const uploadKycDocument = useCallback(async (side: 'front' | 'back', uri: string) => {
+  const uploadKycDocument = useCallback(async (side: 'front' | 'back' | 'selfie', uri: string) => {
     const updated = await api.uploadKycDocument(side, uri);
     setUser(updated);
   }, []);

@@ -22,6 +22,8 @@
     "backend:db:migrate": "npm run db:migrate --prefix backend",
     "backend:admin:approve": "npm run admin:approve --prefix backend",
     "backend:admin:reject": "npm run admin:reject --prefix backend",
-    "backend:admin:provision": "npm run admin:provision --prefix backend"
+    "backend:admin:provision": "npm run admin:provision --prefix backend",
+    "admin": "npm run dev --prefix appAdmin",
+    "admin:build": "npm run build --prefix appAdmin"
   }
 }
