@@ -55,6 +55,7 @@ function toAdminCardFundTx(tx: {
   userId: string;
   walletTransactionId: string;
   amountGmd: number;
+  feeGmd: number;
   amountUsd: number;
   exchangeRate: number;
   stripeBalanceBeforeUsd: number;
@@ -71,6 +72,8 @@ function toAdminCardFundTx(tx: {
     userId: tx.userId,
     walletTransactionId: tx.walletTransactionId,
     amountGmd: tx.amountGmd,
+    feeGmd: tx.feeGmd,
+    totalGmd: tx.amountGmd + tx.feeGmd,
     amountUsd: tx.amountUsd,
     exchangeRate: tx.exchangeRate,
     stripeBalanceBeforeUsd: tx.stripeBalanceBeforeUsd,

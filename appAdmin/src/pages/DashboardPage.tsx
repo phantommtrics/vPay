@@ -72,7 +72,7 @@ export function DashboardPage() {
             <div className="panel-header flex items-center justify-between">
               <h2 className="text-sm font-semibold text-[var(--color-heading)]">Recent wallet activity</h2>
               <Link
-                to="/reports"
+                to="/reports/transactions"
                 className="flex items-center gap-1 text-xs font-medium text-[var(--color-accent)] hover:underline">
                 View all <ArrowRight size={12} />
               </Link>
@@ -142,7 +142,7 @@ export function DashboardPage() {
                 <ArrowRight size={16} className="text-[var(--color-text-muted)]" />
               </Link>
               <Link
-                to="/reports"
+                to="/reports/transactions"
                 className="flex items-center gap-3 rounded-md border border-[var(--color-border)] p-4 transition hover:border-[var(--color-border-strong)] hover:bg-[var(--color-canvas-subtle)]">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-[#f3e8ff] text-[#6b21a8]">
                   <CreditCard size={18} />

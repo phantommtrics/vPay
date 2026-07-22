@@ -4,6 +4,7 @@ import {
 } from './settlement/config-cache.js';
 import type { WalletTopupFeePricing } from './settlement/calculator.js';
 import {
+  getCardFundFeePricing,
   getCardExpiryConfigFromCatalog,
   getCardIssuanceConfigFromCatalog,
   getFundConfigFromCatalog,
@@ -46,19 +47,22 @@ export type FundConfigResponse = {
   /** Present when wallet top-up uses a fixed rate UCP. */
   feePercent?: number;
   walletTopupFee: WalletTopupFeePricing;
+  cardFundFee: WalletTopupFeePricing;
   simulationEnabled: boolean;
 };
 
 export async function getFundConfigAsync(): Promise<FundConfigResponse> {
-  const [{ exchangeRate }, walletTopupFee] = await Promise.all([
+  const [{ exchangeRate }, walletTopupFee, cardFundFee] = await Promise.all([
     getFundConfigFromCatalog(),
     getWalletTopupFeePricing(),
+    getCardFundFeePricing(),
   ]);
 
   return {
     exchangeRate,
     ...(walletTopupFee.type === 'fixed' ? { feePercent: walletTopupFee.feePercent } : {}),
     walletTopupFee,
+    cardFundFee,
     simulationEnabled: isFundSimulationEnabled(),
   };
 }

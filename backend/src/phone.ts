@@ -1,4 +1,4 @@
-import type { User } from '@prisma/client';
+import { AccountStatus, type User } from '@prisma/client';
 
 import { prisma } from './db.js';
 import { normalizePhoneE164, resolveCountryCode } from './stripe/mappers.js';
@@ -35,6 +35,7 @@ export async function assertPhoneAvailable(userId: string, phoneE164: string): P
   const taken = await prisma.user.findFirst({
     where: {
       phoneE164,
+      accountStatus: AccountStatus.ACTIVE,
       NOT: { id: userId },
     },
     select: { id: true },

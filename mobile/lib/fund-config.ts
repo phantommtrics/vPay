@@ -14,6 +14,7 @@ export type FundConfig = {
   exchangeRate: number;
   feePercent?: number;
   walletTopupFee: WalletTopupFeePricing;
+  cardFundFee: WalletTopupFeePricing;
   simulationEnabled: boolean;
 };
 

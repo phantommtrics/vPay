@@ -4,8 +4,10 @@ import { CardFundTransactionStatus, StripeProvisioningStatus } from '@prisma/cli
 import { z } from 'zod';
 
 import { prisma } from '../db.js';
+import { postCardFundJournal } from '../journal/service.js';
 import { getFundConfigAsync } from '../fund-config.js';
 import { log } from '../logger.js';
+import { calculateCardFundFee } from '../settlement/platform-config.js';
 import { creditCardBalanceUsd, getCardBalanceUsdForUser } from '../stripe/card-balance.js';
 import {
   creditWallet,
@@ -25,6 +27,7 @@ const fundCardSchema = z.object({
 function toPublicCardFundTransaction(tx: {
   id: string;
   amountGmd: number;
+  feeGmd: number;
   amountUsd: number;
   exchangeRate: number;
   stripeBalanceBeforeUsd: number;
@@ -38,6 +41,8 @@ function toPublicCardFundTransaction(tx: {
   return {
     id: tx.id,
     amountGmd: tx.amountGmd,
+    feeGmd: tx.feeGmd,
+    totalGmd: tx.amountGmd + tx.feeGmd,
     amountUsd: tx.amountUsd,
     exchangeRate: tx.exchangeRate,
     stripeBalanceBeforeUsd: tx.stripeBalanceBeforeUsd,
@@ -110,6 +115,7 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
     }
 
     const { exchangeRate } = await getFundConfigAsync();
+    const { feeGmd, totalGmd } = await calculateCardFundFee(amountGmd);
     const amountUsd = amountGmd / exchangeRate;
 
     const before = await getCardBalanceUsdForUser(user);
@@ -121,12 +127,15 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
     try {
       walletTx = await debitWallet({
         userId,
-        amountGmd,
+        amountGmd: totalGmd,
         type: WalletTransactionType.CARD_FUND,
         deviceId: req.deviceId,
         referenceType: 'card_fund',
         referenceId: cardFundId,
-        description: 'Card funding',
+        description:
+          feeGmd > 0
+            ? `Card funding (${amountGmd} GMD + ${feeGmd} GMD fee)`
+            : 'Card funding',
         usdEstimate: amountUsd,
         exchangeRate,
       });
@@ -147,7 +156,7 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
     if (!credit.credited) {
       await creditWallet({
         userId,
-        amountGmd,
+        amountGmd: totalGmd,
         type: WalletTransactionType.ADJUSTMENT,
         deviceId: req.deviceId,
         referenceType: 'card_fund_reversal',
@@ -162,6 +171,7 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
           deviceId: req.deviceId,
           walletTransactionId: walletTx.id,
           amountGmd,
+          feeGmd,
           amountUsd,
           exchangeRate,
           stripeBalanceBeforeUsd: before.balanceUsd,
@@ -192,6 +202,7 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
         deviceId: req.deviceId,
         walletTransactionId: walletTx.id,
         amountGmd,
+        feeGmd,
         amountUsd,
         exchangeRate,
         stripeBalanceBeforeUsd: before.balanceUsd,
@@ -201,6 +212,15 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
         stripeCredited: credit.stripeCredited,
         status: CardFundTransactionStatus.COMPLETED,
       },
+    });
+
+    await postCardFundJournal({
+      walletId: walletTx.walletId,
+      walletTransactionId: walletTx.id,
+      cardFundTransactionId: cardFundTx.id,
+      amountGmd,
+      feeGmd,
+      metadata: { walletTransactionId: walletTx.id },
     });
 
     res.json({

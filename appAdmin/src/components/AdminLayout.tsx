@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   BarChart3,
+  Building2,
   ChevronDown,
   ChevronRight,
   ClipboardCheck,
@@ -11,6 +12,7 @@ import {
   LineChart,
   LogOut,
   List,
+  Mail,
   Package,
   Percent,
   Settings,
@@ -19,6 +21,7 @@ import {
   UserCog,
   Users,
   UsersRound,
+  Wallet,
   Wrench,
 } from 'lucide-react';
 
@@ -30,7 +33,12 @@ const mainNav = [
   { to: '/', label: 'Home', icon: LayoutDashboard, end: true, moduleKey: 'dashboard' },
   { to: '/kyc', label: 'KYC reviews', icon: ClipboardCheck, moduleKey: 'kyc' },
   { to: '/users', label: 'Customers', icon: Users, moduleKey: 'customers' },
-  { to: '/reports', label: 'Reports', icon: BarChart3, moduleKey: 'reports' },
+] as const;
+
+const reportsNav = [
+  { to: '/reports/transactions', label: 'Transactions', icon: Wallet, moduleKey: 'reports' },
+  { to: '/reports/journal', label: 'Journal', icon: BarChart3, moduleKey: 'reports' },
+  { to: '/reports/notifications', label: 'Email notifications', icon: Mail, moduleKey: 'reports' },
 ] as const;
 
 const workflowNav = [
@@ -56,6 +64,12 @@ const systemNav = [
     moduleKey: 'system-config-settlements',
   },
   {
+    to: '/system/business-entities',
+    label: 'Business entities',
+    icon: Building2,
+    moduleKey: 'system-config-business-entities',
+  },
+  {
     to: '/system/exchange-rates',
     label: 'Exchange rates',
     icon: LineChart,
@@ -68,6 +82,9 @@ export function AdminLayout() {
   const { admin, signOut, isAuthenticated, hasPermission } = useAdminAuth();
   const [workflowOpen, setWorkflowOpen] = useState(() =>
     window.location.pathname.startsWith('/workflow'),
+  );
+  const [reportsOpen, setReportsOpen] = useState(() =>
+    window.location.pathname.startsWith('/reports'),
   );
   const [deviceInfoOpen, setDeviceInfoOpen] = useState(() =>
     window.location.pathname.startsWith('/device-info'),
@@ -87,6 +104,7 @@ export function AdminLayout() {
   };
 
   const visibleMainNav = mainNav.filter((item) => hasPermission(item.moduleKey, 'view'));
+  const visibleReportsNav = reportsNav.filter((item) => hasPermission(item.moduleKey, 'view'));
   const visibleWorkflowNav = workflowNav.filter((item) => hasPermission(item.moduleKey, 'view'));
   const visibleDeviceInfoNav = deviceInfoNav.filter((item) => hasPermission(item.moduleKey, 'view'));
   const visibleSystemNav = systemNav.filter((item) => hasPermission(item.moduleKey, 'view'));
@@ -120,6 +138,38 @@ export function AdminLayout() {
               {item.label}
             </NavLink>
           ))}
+
+          {visibleReportsNav.length > 0 ? (
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setReportsOpen((open) => !open)}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-[13px] font-medium text-[var(--color-text)] hover:bg-[var(--color-canvas-subtle)] hover:text-[var(--color-heading)]">
+                <BarChart3 size={16} strokeWidth={2} />
+                <span className="flex-1 text-left">Reports</span>
+                {reportsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {reportsOpen ? (
+                <div className="ml-3 mt-0.5 space-y-0.5 border-l border-[var(--color-border)] pl-2">
+                  {visibleReportsNav.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      className={({ isActive }) =>
+                        `flex items-center gap-2 rounded-md px-3 py-1.5 text-[12px] font-medium transition ${
+                          isActive
+                            ? 'bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                            : 'text-[var(--color-text-muted)] hover:bg-[var(--color-canvas-subtle)] hover:text-[var(--color-heading)]'
+                        }`
+                      }>
+                      <item.icon size={14} strokeWidth={2} />
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           {visibleWorkflowNav.length > 0 ? (
             <div className="pt-2">

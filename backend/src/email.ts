@@ -1,6 +1,13 @@
 import { Resend } from 'resend';
+import {
+  EmailNotificationAudience,
+  EmailNotificationStatus,
+  EmailNotificationTemplate,
+  type Prisma,
+} from '@prisma/client';
 
 import type { OtpEmailDeviceSummary } from './device/format.js';
+import { logEmailNotification } from './email-log.js';
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const fromEmail = process.env.RESEND_FROM_EMAIL ?? 'onboarding@resend.dev';
@@ -15,15 +22,83 @@ function formatFromAddress(): string {
   return `${appName} <${fromEmail}>`;
 }
 
+type SendEmailLogContext = {
+  template: EmailNotificationTemplate;
+  audience: EmailNotificationAudience;
+  metadata?: Prisma.InputJsonValue;
+};
+
+async function sendAndLogEmail(
+  to: string,
+  subject: string,
+  html: string,
+  logContext: SendEmailLogContext,
+): Promise<void> {
+  if (!resend) {
+    console.log(`[dev] Email (${logContext.template}) to ${to}: ${subject}`);
+    await logEmailNotification({
+      recipientEmail: to,
+      template: logContext.template,
+      audience: logContext.audience,
+      subject,
+      body: html,
+      status: EmailNotificationStatus.SKIPPED,
+      metadata: logContext.metadata,
+    });
+    return;
+  }
+
+  const { data, error } = await resend.emails.send({
+    from: formatFromAddress(),
+    to,
+    subject,
+    html,
+  });
+
+  if (error) {
+    await logEmailNotification({
+      recipientEmail: to,
+      template: logContext.template,
+      audience: logContext.audience,
+      subject,
+      body: html,
+      status: EmailNotificationStatus.FAILED,
+      errorMessage: error.message,
+      metadata: logContext.metadata,
+    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[dev] Email to ${to} failed (Resend: ${error.message})`);
+      return;
+    }
+    throw new Error(error.message);
+  }
+
+  await logEmailNotification({
+    recipientEmail: to,
+    template: logContext.template,
+    audience: logContext.audience,
+    subject,
+    body: html,
+    status: EmailNotificationStatus.SENT,
+    resendMessageId: data?.id ?? null,
+    metadata: logContext.metadata,
+  });
+}
+
 export async function sendOtpEmail(
   email: string,
   code: string,
   options: {
     device?: OtpEmailDeviceSummary;
     accountDeviceLocked?: boolean;
+    audience?: 'customer' | 'admin';
   } = {},
 ): Promise<void> {
   const app = appName;
+  const audience =
+    options.audience === 'admin'
+      ? EmailNotificationAudience.ADMIN
+      : EmailNotificationAudience.CUSTOMER;
 
   const introParagraph = options.device
     ? `You asked to sign in from <strong>${options.device.deviceLabel}</strong> (${options.device.systemLabel}). Type the code below in the ${app} app.`
@@ -38,19 +113,8 @@ export async function sendOtpEmail(
       `
     : '';
 
-  if (!resend) {
-    console.log(`[dev] OTP for ${email}: ${code}`);
-    if (options.device) {
-      console.log(`[dev] Sign-in device: ${options.device.plainLines.join(' | ')}`);
-    }
-    return;
-  }
-
-  const { error } = await resend.emails.send({
-    from: formatFromAddress(),
-    to: email,
-    subject: `Your ${app} sign-in code`,
-    html: `
+  const subject = `Your ${app} sign-in code`;
+  const html = `
       <div style="font-family: Inter, -apple-system, sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
         <h1 style="color: #111827; font-size: 24px; margin-bottom: 8px;">Sign in to ${app}</h1>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.5; margin-bottom: 24px;">
@@ -72,29 +136,33 @@ export async function sendOtpEmail(
           Did you <strong>not</strong> try to sign in? Ignore this email. Your account stays safe.
         </p>
       </div>
-    `,
-  });
+    `;
 
-  if (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[dev] OTP for ${email}: ${code} (Resend: ${error.message})`);
-      return;
+  if (!resend) {
+    console.log(`[dev] OTP for ${email}: ${code}`);
+    if (options.device) {
+      console.log(`[dev] Sign-in device: ${options.device.plainLines.join(' | ')}`);
     }
-    throw new Error(error.message);
   }
+
+  await sendAndLogEmail(email, subject, html, {
+    template: EmailNotificationTemplate.OTP_SIGN_IN,
+    audience,
+    metadata: options.device
+      ? {
+          deviceLabel: options.device.deviceLabel,
+          systemLabel: options.device.systemLabel,
+          accountDeviceLocked: options.accountDeviceLocked ?? false,
+        }
+      : options.accountDeviceLocked
+        ? { accountDeviceLocked: true }
+        : undefined,
+  });
 }
 
 export async function sendWelcomeEmail(email: string): Promise<void> {
-  if (!resend) {
-    console.log(`[dev] Welcome email for ${email}`);
-    return;
-  }
-
-  const { error } = await resend.emails.send({
-    from: formatFromAddress(),
-    to: email,
-    subject: `Welcome to ${appName} — get your virtual card ready`,
-    html: `
+  const subject = `Welcome to ${appName} — get your virtual card ready`;
+  const html = `
       <div style="font-family: Inter, -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #111827;">
         <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #047857; text-transform: uppercase; letter-spacing: 0.04em;">
           Welcome to ${appName}
@@ -163,16 +231,16 @@ export async function sendWelcomeEmail(email: string): Promise<void> {
           If this wasn't you, you can ignore this email.
         </p>
       </div>
-    `,
-  });
+    `;
 
-  if (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[dev] Welcome email for ${email} (Resend: ${error.message})`);
-      return;
-    }
-    throw new Error(error.message);
+  if (!resend) {
+    console.log(`[dev] Welcome email for ${email}`);
   }
+
+  await sendAndLogEmail(email, subject, html, {
+    template: EmailNotificationTemplate.WELCOME,
+    audience: EmailNotificationAudience.CUSTOMER,
+  });
 }
 
 type CardReadyEmailOptions = {
@@ -189,16 +257,8 @@ export async function sendCardReadyEmail(
     ? ` ending in <strong>${options.last4}</strong>`
     : '';
 
-  if (!resend) {
-    console.log(`[dev] Card ready email for ${email}`);
-    return;
-  }
-
-  const { error } = await resend.emails.send({
-    from: formatFromAddress(),
-    to: email,
-    subject: `Your ${appName} virtual card is ready`,
-    html: `
+  const subject = `Your ${appName} virtual card is ready`;
+  const html = `
       <div style="font-family: Inter, -apple-system, sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #111827;">
         <p style="margin: 0 0 8px; font-size: 14px; font-weight: 600; color: #047857; text-transform: uppercase; letter-spacing: 0.04em;">
           You're all set
@@ -274,14 +334,15 @@ export async function sendCardReadyEmail(
           If you have questions, reply to this email or contact support through the app.
         </p>
       </div>
-    `,
-  });
+    `;
 
-  if (error) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[dev] Card ready email for ${email} (Resend: ${error.message})`);
-      return;
-    }
-    throw new Error(error.message);
+  if (!resend) {
+    console.log(`[dev] Card ready email for ${email}`);
   }
+
+  await sendAndLogEmail(email, subject, html, {
+    template: EmailNotificationTemplate.CARD_READY,
+    audience: EmailNotificationAudience.CUSTOMER,
+    metadata: options.last4 ? { last4: options.last4 } : undefined,
+  });
 }

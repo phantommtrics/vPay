@@ -27,6 +27,7 @@ const settlementFieldsSchema = z.object({
   startDate: dateFieldSchema,
   expiryDate: dateFieldSchema,
   status: catalogStatusSchema.optional(),
+  feeDestinationAccountId: z.union([z.string().min(1), z.null()]).optional(),
 });
 
 const createSettlementSchema = settlementFieldsSchema.superRefine(validateDateRange);
@@ -41,6 +42,9 @@ const updateSettlementSchema = settlementFieldsSchema
 const settlementInclude = {
   product: { select: { id: true, code: true, name: true, displayName: true, currency: true } },
   ucp: { select: { id: true, code: true, name: true, unit: true, ucpType: true } },
+  feeDestinationAccount: {
+    select: { id: true, code: true, name: true, purpose: true, currency: true },
+  },
 } as const;
 
 function paramId(req: AdminAuthedRequest): string {
@@ -72,10 +76,18 @@ function formatSettlement(row: {
   startDate: Date | null;
   expiryDate: Date | null;
   status: CatalogStatus;
+  feeDestinationAccountId: string | null;
   createdAt: Date;
   updatedAt: Date;
   product: { id: string; code: string; name: string; displayName: string; currency: string };
   ucp: { id: string; code: string; name: string; unit: string; ucpType: string };
+  feeDestinationAccount: {
+    id: string;
+    code: string;
+    name: string;
+    purpose: string;
+    currency: string;
+  } | null;
 }) {
   return {
     id: row.id,
@@ -87,6 +99,8 @@ function formatSettlement(row: {
     startDate: row.startDate,
     expiryDate: row.expiryDate,
     status: row.status,
+    feeDestinationAccountId: row.feeDestinationAccountId,
+    feeDestinationAccount: row.feeDestinationAccount,
     product: row.product,
     ucp: row.ucp,
     createdAt: row.createdAt,
@@ -150,6 +164,16 @@ export async function handleCreateAdminSettlementRequest(
     return;
   }
 
+  if (parsed.data.feeDestinationAccountId) {
+    const account = await prisma.businessAccount.findUnique({
+      where: { id: parsed.data.feeDestinationAccountId },
+    });
+    if (!account) {
+      res.status(400).json({ error: 'Invalid fee destination account ID' });
+      return;
+    }
+  }
+
   try {
     const row = await prisma.settlementRequest.create({
       data: parsed.data,
@@ -189,6 +213,16 @@ export async function handleUpdateAdminSettlementRequest(
     const ucp = await prisma.ucp.findUnique({ where: { id: parsed.data.ucpId } });
     if (!ucp) {
       res.status(400).json({ error: 'Invalid UCP ID' });
+      return;
+    }
+  }
+
+  if (parsed.data.feeDestinationAccountId) {
+    const account = await prisma.businessAccount.findUnique({
+      where: { id: parsed.data.feeDestinationAccountId },
+    });
+    if (!account) {
+      res.status(400).json({ error: 'Invalid fee destination account ID' });
       return;
     }
   }

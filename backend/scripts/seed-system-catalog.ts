@@ -9,9 +9,11 @@ import {
   UcpCalculationType,
   UcpType,
   UcpUnit,
+  BusinessAccountPurpose,
+  BusinessEntityType,
 } from '@prisma/client';
 
-import { PRODUCT_CODES, UCP_CODES } from '../src/settlement/catalog-codes.js';
+import { PRODUCT_CODES, UCP_CODES, BUSINESS_ACCOUNT_CODES } from '../src/settlement/catalog-codes.js';
 import { invalidatePlatformConfigCache } from '../src/settlement/config-cache.js';
 import { prisma } from '../src/db.js';
 
@@ -130,6 +132,7 @@ async function upsertSettlementRequest(data: {
 async function main(): Promise<void> {
   const exchangeRate = parseEnvNumber(process.env.FUND_EXCHANGE_RATE, 71);
   const feePercent = parseEnvNumber(process.env.FUND_FEE_PERCENT, 0.02);
+  const cardFundFeePercent = parseEnvNumber(process.env.CARD_FUND_FEE_PERCENT, feePercent);
   const cardIssuanceFeeUsd = parseEnvNumber(process.env.CARD_ISSUANCE_FEE_USD, 1.5);
   const cardExpiryYears = parseEnvNumber(process.env.CARD_EXPIRY_YEARS, 1);
 
@@ -239,6 +242,16 @@ async function main(): Promise<void> {
     fixedValue: cardIssuanceFeeUsd,
   });
 
+  const cardFundFeeUcp = await upsertUcp({
+    code: UCP_CODES.CARD_FUND_FEE_PERCENT,
+    name: 'Card funding fee',
+    description: `Seeded from CARD_FUND_FEE_PERCENT (${cardFundFeePercent}) — decimal fraction of amount`,
+    unit: UcpUnit.FEES,
+    ucpType: UcpType.FIXED,
+    calculationType: UcpCalculationType.EXCLUSIVE,
+    fixedValue: cardFundFeePercent,
+  });
+
   const cardExpiryUcp = await upsertUcp({
     code: UCP_CODES.CARD_EXPIRY_YEARS,
     name: 'Card expiry years',
@@ -286,6 +299,13 @@ async function main(): Promise<void> {
       priority: 0,
     }),
     upsertSettlementRequest({
+      name: 'Card fund platform fee',
+      description: 'Platform fee on wallet-to-card transfers',
+      productId: cardFundProduct.id,
+      ucpId: cardFundFeeUcp.id,
+      priority: 1,
+    }),
+    upsertSettlementRequest({
       name: 'Global exchange rate',
       description: 'Default GMD/USD rate',
       productId: exchangeRateProduct.id,
@@ -301,13 +321,177 @@ async function main(): Promise<void> {
     }),
   ]);
 
+  const feeIncomeEntity = await prisma.businessEntity.upsert({
+    where: { code: 'platform-fee-income' },
+    update: {
+      name: 'Platform Fee Income',
+      type: BusinessEntityType.VENDOR_INCOME,
+      description: 'Vendor entity for platform fee and income recognition',
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      code: 'platform-fee-income',
+      name: 'Platform Fee Income',
+      type: BusinessEntityType.VENDOR_INCOME,
+      description: 'Vendor entity for platform fee and income recognition',
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  const walletTopupFeesAccount = await prisma.businessAccount.upsert({
+    where: { entityId_code: { entityId: feeIncomeEntity.id, code: 'wallet-topup-fees' } },
+    update: {
+      name: 'Wallet top-up fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: 'wallet-topup-fees',
+      name: 'Wallet top-up fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  const cardIssuanceFeesAccount = await prisma.businessAccount.upsert({
+    where: { entityId_code: { entityId: feeIncomeEntity.id, code: 'card-issuance-fees' } },
+    update: {
+      name: 'Card issuance fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: 'card-issuance-fees',
+      name: 'Card issuance fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  const cardFundFeesAccount = await prisma.businessAccount.upsert({
+    where: { entityId_code: { entityId: feeIncomeEntity.id, code: 'card-fund-fees' } },
+    update: {
+      name: 'Card funding fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: 'card-fund-fees',
+      name: 'Card funding fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  const customerFundsPoolAccount = await prisma.businessAccount.upsert({
+    where: { entityId_code: { entityId: feeIncomeEntity.id, code: 'customer-funds-pool' } },
+    update: {
+      name: 'Customer funds pool',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FUND_HOLDING,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: 'customer-funds-pool',
+      name: 'Customer funds pool',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FUND_HOLDING,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  await prisma.businessAccount.upsert({
+    where: {
+      entityId_code: {
+        entityId: feeIncomeEntity.id,
+        code: BUSINESS_ACCOUNT_CODES.PAYMENTS_RECEIVED,
+      },
+    },
+    update: {
+      name: 'Payments received clearing',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.SETTLEMENT,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: BUSINESS_ACCOUNT_CODES.PAYMENTS_RECEIVED,
+      name: 'Payments received clearing',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.SETTLEMENT,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  await prisma.businessAccount.upsert({
+    where: {
+      entityId_code: {
+        entityId: feeIncomeEntity.id,
+        code: BUSINESS_ACCOUNT_CODES.CARD_FUNDING_CLEARING,
+      },
+    },
+    update: {
+      name: 'Card funding clearing',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.SETTLEMENT,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: BUSINESS_ACCOUNT_CODES.CARD_FUNDING_CLEARING,
+      name: 'Card funding clearing',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.SETTLEMENT,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  await prisma.product.update({
+    where: { id: walletTopupProduct.id },
+    data: { fundHoldingAccountId: customerFundsPoolAccount.id },
+  });
+  await prisma.product.update({
+    where: { id: cardFundProduct.id },
+    data: { fundHoldingAccountId: customerFundsPoolAccount.id },
+  });
+
+  await prisma.settlementRequest.update({
+    where: {
+      productId_ucpId: { productId: walletTopupProduct.id, ucpId: walletFeeUcp.id },
+    },
+    data: { feeDestinationAccountId: walletTopupFeesAccount.id },
+  });
+  await prisma.settlementRequest.update({
+    where: {
+      productId_ucpId: { productId: cardIssuanceProduct.id, ucpId: cardIssuanceFeeUcp.id },
+    },
+    data: { feeDestinationAccountId: cardIssuanceFeesAccount.id },
+  });
+  await prisma.settlementRequest.update({
+    where: {
+      productId_ucpId: { productId: cardFundProduct.id, ucpId: cardFundFeeUcp.id },
+    },
+    data: { feeDestinationAccountId: cardFundFeesAccount.id },
+  });
+
   invalidatePlatformConfigCache();
 
   console.log('Seeded system catalog:');
   console.log(`  Services: ${platformService.name}, ${walletService.name}, ${cardService.name}`);
   console.log(`  Products: 5 (exchange-rate, wallet-topup, card-issuance, card-fund, card-expiry)`);
-  console.log(`  UCPs: 4`);
+  console.log(`  UCPs: 5`);
   console.log(`  Settlement requests: ${settlements.length}`);
+  console.log(`  Business entity: ${feeIncomeEntity.name} with 6 accounts`);
 }
 
 main()

@@ -5,6 +5,11 @@ import { FundingOrderStatus } from '@prisma/client';
 
 import { prisma } from '../db.js';
 import { log } from '../logger.js';
+import {
+  postCardFundJournal,
+  postCardIssuanceFeeJournal,
+  postWalletTopupJournal,
+} from '../journal/service.js';
 import { creditWalletFromFundingOrder } from '../wallet/service.js';
 
 function verifyDirectPayPartnerWebhook(
@@ -134,6 +139,17 @@ export async function handleDirectPayWebhook(req: Request, res: Response): Promi
           },
         },
       });
+
+      await postWalletTopupJournal({
+        fundingOrderId: fundingId,
+        walletId: walletTx.walletId,
+        walletTransactionId: walletTx.id,
+        amountGmd: order.amountGmd,
+        feeGmd: order.feeGmd,
+        totalGmd: order.totalGmd,
+        metadata: { walletTransactionId: walletTx.id, paymentId },
+      });
+
       log('Funding order paid via directPay webhook', {
         fundingId,
         paymentId,

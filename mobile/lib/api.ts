@@ -128,6 +128,15 @@ export async function updateProfile(fields: ProfileUpdate): Promise<User> {
   return data.user;
 }
 
+export const ACCOUNT_DELETE_CONFIRMATION = 'DELETE MY ACCOUNT';
+
+export async function deleteAccount(confirmation: string): Promise<void> {
+  await request('/api/auth/account', {
+    method: 'DELETE',
+    body: JSON.stringify({ confirmation }),
+  });
+}
+
 export async function uploadKycDocument(
   side: 'front' | 'back' | 'selfie',
   uri: string,

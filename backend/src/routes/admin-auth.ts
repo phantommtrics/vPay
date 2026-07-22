@@ -100,7 +100,7 @@ export async function handleAdminSendOtp(req: PreAuthRequest, res: Response): Pr
   await saveOtp(email, code, expiresAt);
 
   try {
-    await sendOtpEmail(email, code);
+    await sendOtpEmail(email, code, { audience: 'admin' });
     log('Admin OTP sent', { email });
     res.json({ ok: true, message: 'Verification code sent' });
   } catch (err) {

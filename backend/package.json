@@ -18,6 +18,7 @@
     "admin:set-user": "node --import tsx scripts/set-admin-user.ts",
     "admin:push-vapid": "node --import tsx scripts/generate-vapid-keys.ts",
     "seed:catalog": "node --import tsx scripts/seed-system-catalog.ts",
+    "backfill:journal-totals": "node --import tsx scripts/backfill-journal-totals.ts",
     "seed:permissions": "node --import tsx scripts/seed-admin-permissions.ts",
     "exchange-rate:sync": "node --import tsx scripts/sync-exchange-rate.ts",
     "setup:stripe-inbound": "node --import tsx scripts/setup-stripe-test-inbound.ts"

@@ -7,6 +7,9 @@ import { DashboardPage } from './pages/DashboardPage';
 import { KycQueuePage } from './pages/KycQueuePage';
 import { LoginPage } from './pages/LoginPage';
 import { ReportsPage } from './pages/ReportsPage';
+import { NotificationReportPage } from './pages/NotificationReportPage';
+import { JournalReportPage } from './pages/JournalReportPage';
+import { BusinessEntitiesPage } from './pages/system/BusinessEntitiesPage';
 import { OperatorsPage } from './pages/system/OperatorsPage';
 import { ProductsPage } from './pages/system/ProductsPage';
 import { RolesPage } from './pages/system/RolesPage';
@@ -114,7 +117,31 @@ export default function App() {
               path="reports"
               element={
                 <RequirePermission moduleKey="reports">
+                  <Navigate to="/reports/transactions" replace />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="reports/transactions"
+              element={
+                <RequirePermission moduleKey="reports">
                   <ReportsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="reports/notifications"
+              element={
+                <RequirePermission moduleKey="reports">
+                  <NotificationReportPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="reports/journal"
+              element={
+                <RequirePermission moduleKey="reports">
+                  <JournalReportPage />
                 </RequirePermission>
               }
             />
@@ -187,6 +214,14 @@ export default function App() {
               element={
                 <RequirePermission moduleKey="system-config-settlements">
                   <SettlementRequestsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="system/business-entities"
+              element={
+                <RequirePermission moduleKey="system-config-business-entities">
+                  <BusinessEntitiesPage />
                 </RequirePermission>
               }
             />

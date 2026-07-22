@@ -27,6 +27,12 @@ import { useCards } from '@/hooks/useCards';
 import { useWallet } from '@/hooks/useWallet';
 import { ApiError, fundCardFromWallet, getFundConfig, payCardIssuance } from '@/lib/api';
 import { formatCardBalance, formatGmd } from '@/lib/currency';
+import {
+  estimateWalletTopupFee,
+  formatWalletTopupFeeLabel,
+  type FundConfig,
+  type WalletTopupFeePricing,
+} from '@/lib/fund-config';
 import { toFriendlyFundError } from '@/lib/fund-errors';
 import { colors, radius, spacing } from '@/constants/theme';
 
@@ -59,6 +65,7 @@ export default function CardsScreen() {
   }, [refresh, refreshWallet, user?.kycComplete]);
 
   const [fundAmount, setFundAmount] = useState('');
+  const [fundConfig, setFundConfig] = useState<FundConfig | null>(null);
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
   const [isFunding, setIsFunding] = useState(false);
   const [fundError, setFundError] = useState('');
@@ -68,12 +75,24 @@ export default function CardsScreen() {
   const [reissueError, setReissueError] = useState('');
 
   const numFundAmount = parseFloat(fundAmount) || 0;
+  const cardFundFee: WalletTopupFeePricing | undefined =
+    fundConfig?.cardFundFee ??
+    (fundConfig?.feePercent != null ? { type: 'fixed', feePercent: fundConfig.feePercent } : undefined);
+  const fundFeeGmd =
+    cardFundFee && numFundAmount > 0 ? estimateWalletTopupFee(cardFundFee, numFundAmount) : 0;
+  const fundTotalGmd = numFundAmount > 0 ? numFundAmount + fundFeeGmd : 0;
+  const fundFeeLabel = cardFundFee
+    ? formatWalletTopupFeeLabel(cardFundFee, numFundAmount)
+    : '—';
   const fundUsdEstimate =
     exchangeRate && numFundAmount > 0 ? numFundAmount / exchangeRate : undefined;
 
   useEffect(() => {
     getFundConfig()
-      .then((config) => setExchangeRate(config.exchangeRate))
+      .then((config) => {
+        setFundConfig(config);
+        setExchangeRate(config.exchangeRate);
+      })
       .catch(() => {});
   }, []);
 
@@ -113,8 +132,12 @@ export default function CardsScreen() {
       setFundError('Top up your vPay wallet first from the Wallet tab.');
       return;
     }
-    if (numFundAmount > wallet.balanceGmd) {
-      setFundError('Amount exceeds your vPay wallet balance.');
+    if (fundTotalGmd > wallet.balanceGmd) {
+      setFundError(
+        fundFeeGmd > 0
+          ? `Total including ${formatGmd(fundFeeGmd)} fee exceeds your wallet balance.`
+          : 'Amount exceeds your vPay wallet balance.',
+      );
       return;
     }
 
@@ -134,7 +157,7 @@ export default function CardsScreen() {
     } finally {
       setIsFunding(false);
     }
-  }, [numFundAmount, isFunding, primaryCard, wallet, refresh, refreshWallet]);
+  }, [numFundAmount, fundTotalGmd, fundFeeGmd, isFunding, primaryCard, wallet, refresh, refreshWallet]);
 
   if (fundSuccess) {
     return (
@@ -265,6 +288,12 @@ export default function CardsScreen() {
                 Available: {formatGmd(wallet.balanceGmd)}
                 {fundUsdEstimate !== undefined && numFundAmount > 0
                   ? ` · ≈ $${fundUsdEstimate.toFixed(2)} USD to card`
+                  : ''}
+                {fundFeeGmd > 0 && numFundAmount > 0
+                  ? ` · Fee ${fundFeeLabel} (${formatGmd(fundFeeGmd)})`
+                  : ''}
+                {fundTotalGmd > 0 && fundFeeGmd > 0
+                  ? ` · Total ${formatGmd(fundTotalGmd)}`
                   : ''}
               </Text>
             ) : (

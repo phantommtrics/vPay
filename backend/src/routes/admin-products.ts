@@ -43,6 +43,7 @@ const productFieldsSchema = z.object({
   expiryDate: dateFieldSchema,
   currency: z.string().min(3).max(3).transform((v) => v.toUpperCase()),
   status: catalogStatusSchema.optional(),
+  fundHoldingAccountId: z.union([z.string().min(1), z.null()]).optional(),
 });
 
 const createProductSchema = productFieldsSchema.superRefine(validateDateRange);
@@ -56,6 +57,7 @@ const updateProductSchema = productFieldsSchema
 
 const productInclude = {
   service: { select: { id: true, name: true } },
+  fundHoldingAccount: { select: { id: true, code: true, name: true, purpose: true, currency: true } },
 } as const;
 
 function paramId(req: AdminAuthedRequest): string {
@@ -90,9 +92,17 @@ function formatProduct(product: {
   expiryDate: Date | null;
   currency: string;
   status: CatalogStatus;
+  fundHoldingAccountId: string | null;
   createdAt: Date;
   updatedAt: Date;
   service: { id: string; name: string };
+  fundHoldingAccount: {
+    id: string;
+    code: string;
+    name: string;
+    purpose: string;
+    currency: string;
+  } | null;
 }) {
   return {
     id: product.id,
@@ -108,6 +118,8 @@ function formatProduct(product: {
     expiryDate: product.expiryDate,
     currency: product.currency,
     status: product.status,
+    fundHoldingAccountId: product.fundHoldingAccountId,
+    fundHoldingAccount: product.fundHoldingAccount,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
   };
@@ -151,6 +163,16 @@ export async function handleCreateAdminProduct(req: AdminAuthedRequest, res: Res
     return;
   }
 
+  if (parsed.data.fundHoldingAccountId) {
+    const account = await prisma.businessAccount.findUnique({
+      where: { id: parsed.data.fundHoldingAccountId },
+    });
+    if (!account) {
+      res.status(400).json({ error: 'Invalid fund holding account ID' });
+      return;
+    }
+  }
+
   try {
     const product = await prisma.product.create({
       data: parsed.data,
@@ -174,6 +196,16 @@ export async function handleUpdateAdminProduct(req: AdminAuthedRequest, res: Res
     const service = await prisma.service.findUnique({ where: { id: parsed.data.serviceId } });
     if (!service) {
       res.status(400).json({ error: 'Invalid service ID' });
+      return;
+    }
+  }
+
+  if (parsed.data.fundHoldingAccountId) {
+    const account = await prisma.businessAccount.findUnique({
+      where: { id: parsed.data.fundHoldingAccountId },
+    });
+    if (!account) {
+      res.status(400).json({ error: 'Invalid fund holding account ID' });
       return;
     }
   }

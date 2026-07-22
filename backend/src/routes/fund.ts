@@ -11,6 +11,7 @@ import {
   startDirectPayWalletCheckout,
 } from '../directpay/partner.js';
 import { prisma } from '../db.js';
+import { postWalletTopupJournal } from '../journal/service.js';
 import {
   getFundingOrderMetadata,
   mergePaymentSourceMetadata,
@@ -504,6 +505,16 @@ export async function handleSimulateFund(req: AuthedRequest, res: Response): Pro
           walletTransactionId: walletTx.id,
         } as Prisma.InputJsonValue,
       },
+    });
+
+    await postWalletTopupJournal({
+      fundingOrderId: prepared.id,
+      walletId: walletTx.walletId,
+      walletTransactionId: walletTx.id,
+      amountGmd: prepared.amountGmd,
+      feeGmd: prepared.feeGmd,
+      totalGmd: prepared.totalGmd,
+      metadata: { walletTransactionId: walletTx.id, simulated: true },
     });
 
     const wallet = await getWalletBalance(userId);

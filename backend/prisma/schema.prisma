@@ -64,6 +64,11 @@ enum AdminUserStatus {
   DISABLED
 }
 
+enum AccountStatus {
+  ACTIVE
+  TERMINATED
+}
+
 enum CatalogStatus {
   ACTIVE
   INACTIVE
@@ -113,6 +118,27 @@ enum UcpSlabValueType {
   FIXED_AMOUNT
 }
 
+enum BusinessEntityType {
+  VENDOR_INCOME
+}
+
+enum BusinessAccountPurpose {
+  FEE_INCOME
+  FUND_HOLDING
+  SETTLEMENT
+  OTHER
+}
+
+enum BusinessAccountTxnType {
+  CREDIT
+  DEBIT
+}
+
+enum JournalAccountType {
+  CUSTOMER_WALLET
+  BUSINESS_ACCOUNT
+}
+
 enum KycReviewAction {
   APPROVED
   REJECTED
@@ -121,6 +147,7 @@ enum KycReviewAction {
 model User {
   id                       String                   @id @default(uuid())
   email                    String                   @unique
+  originalEmail            String?                  @map("original_email")
   firstName                String?                  @map("first_name")
   lastName                 String?                  @map("last_name")
   phone                    String?
@@ -131,6 +158,8 @@ model User {
   country                  String?
   countryCode              String?                  @map("country_code")
   postalCode               String?                  @map("postal_code")
+  accountStatus            AccountStatus            @default(ACTIVE) @map("account_status")
+  terminatedAt             DateTime?                @map("terminated_at")
   kycStatus                KycStatus                @default(INCOMPLETE) @map("kyc_status")
   kycComplete              Boolean                  @default(false) @map("kyc_complete")
   documentType             String?                  @map("document_type")
@@ -178,7 +207,9 @@ model User {
   kycSubmittedDevice     UserDevice?              @relation("KycSubmittedDevice", fields: [kycSubmittedDeviceId], references: [id], onDelete: SetNull)
   lockedDevice           UserDevice?              @relation("LockedDevice", fields: [lockedDeviceId], references: [id], onDelete: SetNull)
   monthlyDevices         UserMonthlyDevice[]
+  emailNotifications     EmailNotification[]
 
+  @@index([accountStatus])
   @@map("users")
 }
 
@@ -446,6 +477,7 @@ model CardFundTransaction {
   deviceId               String?                   @map("device_id")
   walletTransactionId    String                    @unique @map("wallet_transaction_id")
   amountGmd              Float                     @map("amount_gmd")
+  feeGmd                 Float                     @default(0) @map("fee_gmd")
   amountUsd              Float                     @map("amount_usd")
   exchangeRate           Float                     @map("exchange_rate")
   stripeBalanceBeforeUsd Float                     @map("stripe_balance_before_usd")
@@ -504,13 +536,16 @@ model Product {
   expiryDate           DateTime?            @map("expiry_date")
   currency             String
   status               CatalogStatus        @default(ACTIVE)
+  fundHoldingAccountId String?              @map("fund_holding_account_id")
   service              Service              @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  fundHoldingAccount   BusinessAccount?     @relation("ProductFundHolding", fields: [fundHoldingAccountId], references: [id], onDelete: SetNull)
   settlementRequests   SettlementRequest[]
   createdAt            DateTime             @default(now()) @map("created_at")
   updatedAt            DateTime             @updatedAt @map("updated_at")
 
   @@unique([serviceId, name])
   @@index([serviceId])
+  @@index([fundHoldingAccountId])
   @@map("products")
 }
 
@@ -561,22 +596,144 @@ model SettlementRequest {
   ucpId       String        @map("ucp_id")
   priority    Int           @default(0)
   startDate   DateTime?     @map("start_date")
-  expiryDate  DateTime?     @map("expiry_date")
-  status      CatalogStatus @default(ACTIVE)
-  product     Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
-  ucp         Ucp           @relation(fields: [ucpId], references: [id], onDelete: Restrict)
+  expiryDate              DateTime?     @map("expiry_date")
+  status                  CatalogStatus @default(ACTIVE)
+  feeDestinationAccountId String?       @map("fee_destination_account_id")
+  product                 Product       @relation(fields: [productId], references: [id], onDelete: Restrict)
+  ucp                     Ucp           @relation(fields: [ucpId], references: [id], onDelete: Restrict)
+  feeDestinationAccount   BusinessAccount? @relation("SettlementFeeDestination", fields: [feeDestinationAccountId], references: [id], onDelete: SetNull)
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@unique([productId, ucpId])
   @@index([productId])
   @@index([ucpId])
+  @@index([feeDestinationAccountId])
   @@map("settlement_requests")
+}
+
+model BusinessEntity {
+  id          String              @id @default(cuid())
+  code        String              @unique
+  name        String
+  type        BusinessEntityType
+  description String?
+  status      CatalogStatus       @default(ACTIVE)
+  accounts    BusinessAccount[]
+  createdAt   DateTime            @default(now()) @map("created_at")
+  updatedAt   DateTime            @updatedAt @map("updated_at")
+
+  @@map("business_entities")
+}
+
+model BusinessAccount {
+  id                        String                       @id @default(cuid())
+  entityId                  String                       @map("entity_id")
+  code                      String
+  name                      String
+  currency                  String
+  purpose                   BusinessAccountPurpose
+  balance                   Float                        @default(0)
+  status                    CatalogStatus                @default(ACTIVE)
+  entity                    BusinessEntity               @relation(fields: [entityId], references: [id], onDelete: Restrict)
+  transactions              BusinessAccountTransaction[]
+  fundHoldingProducts       Product[]                    @relation("ProductFundHolding")
+  feeDestinationSettlements SettlementRequest[]          @relation("SettlementFeeDestination")
+  createdAt                 DateTime                     @default(now()) @map("created_at")
+  updatedAt                 DateTime                     @updatedAt @map("updated_at")
+
+  @@unique([entityId, code])
+  @@index([entityId])
+  @@map("business_accounts")
+}
+
+model BusinessAccountTransaction {
+  id            String                 @id @default(cuid())
+  accountId     String                 @map("account_id")
+  type          BusinessAccountTxnType
+  amount        Float
+  balanceBefore Float                  @map("balance_before")
+  balanceAfter  Float                  @map("balance_after")
+  referenceType String                 @map("reference_type")
+  referenceId   String                 @map("reference_id")
+  productCode   String?                @map("product_code")
+  ucpCode       String?                @map("ucp_code")
+  description   String?
+  metadata      Json?
+  journalEntryId String?               @map("journal_entry_id")
+  createdAt     DateTime               @default(now()) @map("created_at")
+
+  account       BusinessAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  journalEntry  JournalEntry?   @relation(fields: [journalEntryId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, createdAt])
+  @@index([accountId, createdAt, id])
+  @@index([referenceType, referenceId])
+  @@index([journalEntryId])
+  @@map("business_account_transactions")
+}
+
+model JournalEntry {
+  id            String        @id @default(cuid())
+  referenceType String        @map("reference_type")
+  referenceId   String        @map("reference_id")
+  description   String?
+  metadata      Json?
+  totalDebit    Float         @default(0) @map("total_debit")
+  totalCredit   Float         @default(0) @map("total_credit")
+  lineCount     Int           @default(0) @map("line_count")
+  postedAt      DateTime      @default(now()) @map("posted_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+
+  lines                       JournalLine[]
+  businessAccountTransactions BusinessAccountTransaction[]
+
+  @@unique([referenceType, referenceId])
+  @@index([postedAt])
+  @@index([postedAt, id])
+  @@map("journal_entries")
+}
+
+model JournalLine {
+  id                       String             @id @default(cuid())
+  journalEntryId           String             @map("journal_entry_id")
+  accountType              JournalAccountType @map("account_type")
+  accountId                String             @map("account_id")
+  debit                    Float              @default(0)
+  credit                   Float              @default(0)
+  walletTransactionId      String?            @map("wallet_transaction_id")
+  businessAccountTransactionId String?        @map("business_account_transaction_id")
+  sortOrder                Int                @default(0) @map("sort_order")
+  createdAt                DateTime           @default(now()) @map("created_at")
+
+  journalEntry JournalEntry @relation(fields: [journalEntryId], references: [id], onDelete: Cascade)
+
+  @@index([journalEntryId])
+  @@index([accountType, accountId])
+  @@index([walletTransactionId])
+  @@map("journal_lines")
 }
 
 enum ExchangeRateSyncStatus {
   SUCCESS
   FAILED
+}
+
+enum EmailNotificationTemplate {
+  OTP_SIGN_IN
+  WELCOME
+  CARD_READY
+}
+
+enum EmailNotificationAudience {
+  CUSTOMER
+  ADMIN
+}
+
+enum EmailNotificationStatus {
+  SENT
+  FAILED
+  SKIPPED
 }
 
 model ExchangeRateSnapshot {
@@ -598,4 +755,27 @@ model ExchangeRateSnapshot {
   @@index([status, requestedAt])
   @@index([targetCurrency, requestedAt])
   @@map("exchange_rate_snapshots")
+}
+
+model EmailNotification {
+  id              String                    @id @default(cuid())
+  recipientEmail  String                    @map("recipient_email")
+  recipientUserId String?                   @map("recipient_user_id")
+  template        EmailNotificationTemplate
+  audience        EmailNotificationAudience
+  subject         String
+  body            String                    @db.Text
+  status          EmailNotificationStatus
+  resendMessageId String?                   @map("resend_message_id")
+  errorMessage    String?                   @map("error_message")
+  metadata        Json?
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  recipientUser User? @relation(fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([recipientEmail, createdAt])
+  @@index([template, createdAt])
+  @@index([status, createdAt])
+  @@map("email_notifications")
 }

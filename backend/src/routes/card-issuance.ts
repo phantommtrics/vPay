@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import { StripeProvisioningStatus } from '@prisma/client';
 
 import { isVirtualCardActive } from '../card-expiry.js';
+import { postCardIssuanceFeeJournal } from '../journal/service.js';
 import { prisma } from '../db.js';
 import { getCardExpiryConfigAsync, getCardIssuanceConfigAsync } from '../fund-config.js';
 import { log } from '../logger.js';
@@ -175,6 +176,14 @@ export async function handlePayCardIssuance(req: DeviceAuthedRequest, res: Respo
       feeUsd: config.feeUsd,
       feeGmd: config.feeGmd,
       walletTransactionId: walletTx.id,
+    });
+
+    await postCardIssuanceFeeJournal({
+      walletId: walletTx.walletId,
+      walletTransactionId: walletTx.id,
+      feeGmd: config.feeGmd,
+      paymentId,
+      metadata: { userId, paymentId },
     });
 
     scheduleCardProvisioning(userId);

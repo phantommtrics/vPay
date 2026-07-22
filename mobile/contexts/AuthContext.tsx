@@ -12,6 +12,7 @@ type AuthContextValue = {
   isLoading: boolean;
   signIn: (email: string, code: string) => Promise<void>;
   signOut: () => Promise<void>;
+  deleteAccount: (confirmation: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (fields: ProfileUpdate) => Promise<void>;
   uploadKycDocument: (side: 'front' | 'back' | 'selfie', uri: string) => Promise<void>;
@@ -98,6 +99,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const deleteAccount = useCallback(
+    async (confirmation: string) => {
+      await api.deleteAccount(confirmation);
+      await clearToken();
+      await clearRegisteredDeviceId();
+      setUser(null);
+    },
+    [],
+  );
+
   const updateProfile = useCallback(async (fields: ProfileUpdate) => {
     const updated = await api.updateProfile(fields);
     setUser(updated);
@@ -119,12 +130,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isLoading,
       signIn,
       signOut,
+      deleteAccount,
       refreshUser,
       updateProfile,
       uploadKycDocument,
       submitKyc,
     }),
-    [user, isLoading, signIn, signOut, refreshUser, updateProfile, uploadKycDocument, submitKyc],
+    [
+      user,
+      isLoading,
+      signIn,
+      signOut,
+      deleteAccount,
+      refreshUser,
+      updateProfile,
+      uploadKycDocument,
+      submitKyc,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

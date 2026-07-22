@@ -56,6 +56,23 @@ export async function resolveUcpForProduct(
   return findActiveUcpByCode(ucpCode);
 }
 
+export async function resolveFirstFeeUcpForProduct(
+  productCode: ProductCode,
+): Promise<UcpWithSlabs | null> {
+  const product = await findActiveProductByCode(productCode);
+  if (!product) return null;
+
+  const match = product.settlementRequests.find((sr) => {
+    if (!isCatalogEntryActive(sr.status, sr.startDate, sr.expiryDate)) return false;
+    return (
+      sr.ucp.unit === 'FEES' &&
+      isCatalogEntryActive(sr.ucp.status, sr.ucp.startDate, sr.ucp.expiryDate)
+    );
+  });
+
+  return match?.ucp ?? null;
+}
+
 export async function resolveScalarFromSettlement(
   productCode: ProductCode,
   ucpCode: UcpCode,

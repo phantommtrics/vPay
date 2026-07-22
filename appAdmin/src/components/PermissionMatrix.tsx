@@ -18,6 +18,7 @@ const MODULE_LABELS: Record<string, string> = {
   'system-config-products': 'System Config — Products',
   'system-config-ucps': 'System Config — UCP',
   'system-config-settlements': 'System Config — Settlement Requests',
+  'system-config-business-entities': 'System Config — Business Entities',
   'system-config-exchange-rates': 'System Config — Exchange Rates',
 };
 

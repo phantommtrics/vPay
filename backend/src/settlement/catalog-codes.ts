@@ -13,8 +13,17 @@ export type ProductCode = (typeof PRODUCT_CODES)[keyof typeof PRODUCT_CODES];
 export const UCP_CODES = {
   GMD_USD_EXCHANGE_RATE: 'gmd-usd-exchange-rate',
   WALLET_TOPUP_FEE_PERCENT: 'wallet-topup-fee-percent',
+  CARD_FUND_FEE_PERCENT: 'card-fund-fee-percent',
   CARD_ISSUANCE_FEE_USD: 'card-issuance-fee-usd',
   CARD_EXPIRY_YEARS: 'card-expiry-years',
 } as const;
 
 export type UcpCode = (typeof UCP_CODES)[keyof typeof UCP_CODES];
+
+/** Stable business account codes for platform ledger routing. */
+export const BUSINESS_ACCOUNT_CODES = {
+  PAYMENTS_RECEIVED: 'payments-received',
+  CARD_FUNDING_CLEARING: 'card-funding-clearing',
+} as const;
+
+export type BusinessAccountCode = (typeof BUSINESS_ACCOUNT_CODES)[keyof typeof BUSINESS_ACCOUNT_CODES];

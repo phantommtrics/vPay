@@ -10,6 +10,7 @@ import {
   LogOut,
   Shield,
   ShieldCheck,
+  Trash2,
   User,
 } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View, Image } from 'react-native';
@@ -146,6 +147,14 @@ export default function ProfileScreen() {
           iconBg={colors.blue50}
           iconColor={colors.blue600}
           onPress={() => router.push('/privacy')}
+        />
+        <SettingsRow
+          icon={Trash2}
+          label="Delete Account"
+          iconBg={colors.red50}
+          iconColor={colors.red500}
+          labelColor={colors.red500}
+          onPress={() => router.push('/delete-account')}
           isLast
         />
       </View>
@@ -181,6 +190,7 @@ function SettingsRow({
   label,
   iconBg,
   iconColor,
+  labelColor,
   onPress,
   isLast,
 }: {
@@ -188,6 +198,7 @@ function SettingsRow({
   label: string;
   iconBg: string;
   iconColor: string;
+  labelColor?: string;
   onPress?: () => void;
   isLast?: boolean;
 }) {
@@ -199,7 +210,9 @@ function SettingsRow({
         <View style={[styles.settingsIcon, { backgroundColor: iconBg }]}>
           <Icon size={16} color={iconColor} />
         </View>
-        <Text style={styles.settingsLabel}>{label}</Text>
+        <Text style={[styles.settingsLabel, labelColor ? { color: labelColor } : null]}>
+          {label}
+        </Text>
       </View>
       <ChevronRight size={18} color={colors.gray400} />
     </Pressable>

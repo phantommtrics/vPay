@@ -59,6 +59,23 @@ import {
   handleUpdateAdminSettlementRequest,
 } from './routes/admin-settlement-requests.js';
 import {
+  adminBusinessEntitiesAuthorize,
+  handleCreateAdminBusinessEntity,
+  handleDeleteAdminBusinessEntity,
+  handleGetAdminBusinessEntity,
+  handleListAdminBusinessEntities,
+  handleUpdateAdminBusinessEntity,
+} from './routes/admin-business-entities.js';
+import {
+  adminBusinessAccountsAuthorize,
+  handleCreateAdminBusinessAccount,
+  handleDeleteAdminBusinessAccount,
+  handleGetAdminBusinessAccount,
+  handleListAdminBusinessAccountTransactions,
+  handleListAdminBusinessAccounts,
+  handleUpdateAdminBusinessAccount,
+} from './routes/admin-business-accounts.js';
+import {
   adminExchangeRatesAuthorize,
   handleAdminListExchangeRatePulls,
   handleAdminListExchangeRateSnapshots,
@@ -111,15 +128,22 @@ import {
   handleAdminPushUnsubscribe,
 } from './routes/admin-push.js';
 import {
+  handleAdminReportEmailNotifications,
   handleAdminReportFundingOrders,
   handleAdminReportWalletTransactions,
 } from './routes/admin-reports.js';
+import {
+  handleAdminReportJournalEntries,
+  handleAdminReportJournalEntryDetail,
+  handleAdminReportTrialBalance,
+} from './routes/admin-journal.js';
 import { handleApproveKyc, handleProvisionCard, handleProvisionDirectPay, handleRejectKyc } from './routes/admin.js';
 import {
   handleKycWorkflowDetail,
   handleKycWorkflowSummary,
 } from './routes/admin-workflow.js';
 import {
+  handleDeleteAccount,
   handleMe,
   handleRegisterDevice,
   handleSendOtp,
@@ -228,6 +252,7 @@ app.get('/api/auth/me', requireAuth, handleMe);
 app.post('/api/auth/register-device', requireAuth, handleRegisterDevice);
 app.patch('/api/auth/device-lock', requireAuth, handleUpdateDeviceLock);
 app.patch('/api/auth/profile', requireAuth, handleUpdateProfile);
+app.delete('/api/auth/account', requireAuth, handleDeleteAccount);
 
 app.post('/api/kyc/upload', requireAuth, upload.single('file'), handleUploadDocument);
 app.post('/api/kyc/submit', requireAuth, attachUserDevice, handleSubmitKyc);
@@ -332,6 +357,74 @@ app.delete(
 );
 
 app.get(
+  '/api/admin/business-entities',
+  requireAdminAccess,
+  adminBusinessEntitiesAuthorize.list,
+  handleListAdminBusinessEntities,
+);
+app.get(
+  '/api/admin/business-entities/:id',
+  requireAdminAccess,
+  adminBusinessEntitiesAuthorize.get,
+  handleGetAdminBusinessEntity,
+);
+app.post(
+  '/api/admin/business-entities',
+  requireAdminAccess,
+  adminBusinessEntitiesAuthorize.create,
+  handleCreateAdminBusinessEntity,
+);
+app.patch(
+  '/api/admin/business-entities/:id',
+  requireAdminAccess,
+  adminBusinessEntitiesAuthorize.update,
+  handleUpdateAdminBusinessEntity,
+);
+app.delete(
+  '/api/admin/business-entities/:id',
+  requireAdminAccess,
+  adminBusinessEntitiesAuthorize.delete,
+  handleDeleteAdminBusinessEntity,
+);
+
+app.get(
+  '/api/admin/business-accounts',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.list,
+  handleListAdminBusinessAccounts,
+);
+app.get(
+  '/api/admin/business-accounts/:id',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.get,
+  handleGetAdminBusinessAccount,
+);
+app.post(
+  '/api/admin/business-accounts',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.create,
+  handleCreateAdminBusinessAccount,
+);
+app.patch(
+  '/api/admin/business-accounts/:id',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.update,
+  handleUpdateAdminBusinessAccount,
+);
+app.delete(
+  '/api/admin/business-accounts/:id',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.delete,
+  handleDeleteAdminBusinessAccount,
+);
+app.get(
+  '/api/admin/business-accounts/:id/transactions',
+  requireAdminAccess,
+  adminBusinessAccountsAuthorize.transactions,
+  handleListAdminBusinessAccountTransactions,
+);
+
+app.get(
   '/api/admin/exchange-rates/snapshots',
   requireAdminAccess,
   adminExchangeRatesAuthorize.list,
@@ -383,6 +476,10 @@ app.get('/api/admin/users/:userId/card-fund/transactions', requireAdminAccess, p
 app.get('/api/admin/activity', requireAdminAccess, perm.dashboardView, handleAdminPlatformActivity);
 app.get('/api/admin/reports/wallet-transactions', requireAdminAccess, perm.reportsView, handleAdminReportWalletTransactions);
 app.get('/api/admin/reports/funding-orders', requireAdminAccess, perm.reportsView, handleAdminReportFundingOrders);
+app.get('/api/admin/reports/email-notifications', requireAdminAccess, perm.reportsView, handleAdminReportEmailNotifications);
+app.get('/api/admin/reports/journal-entries', requireAdminAccess, perm.reportsView, handleAdminReportJournalEntries);
+app.get('/api/admin/reports/journal-entries/:id', requireAdminAccess, perm.reportsView, handleAdminReportJournalEntryDetail);
+app.get('/api/admin/reports/trial-balance', requireAdminAccess, perm.reportsView, handleAdminReportTrialBalance);
 
 app.get('/api/admin/workflow/kyc/summary', requireAdminAccess, perm.workflowView, handleKycWorkflowSummary);
 app.get('/api/admin/workflow/kyc/detail', requireAdminAccess, perm.workflowView, handleKycWorkflowDetail);

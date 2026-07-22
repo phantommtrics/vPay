@@ -465,6 +465,87 @@ export function fetchReportFundingOrders(
   );
 }
 
+export type JournalLineRecord = {
+  id: string;
+  accountType: 'CUSTOMER_WALLET' | 'BUSINESS_ACCOUNT';
+  accountId: string;
+  accountName: string;
+  accountCode: string;
+  debit: number;
+  credit: number;
+  walletTransactionId: string | null;
+  businessAccountTransactionId: string | null;
+  sortOrder: number;
+};
+
+export type JournalEntryRecord = {
+  id: string;
+  referenceType: string;
+  referenceId: string;
+  description: string | null;
+  postedAt: string;
+  createdAt: string;
+  totalDebit: number;
+  totalCredit: number;
+  lineCount: number;
+  lines?: JournalLineRecord[];
+};
+
+export type TrialBalanceRow = {
+  accountType: 'CUSTOMER_WALLET' | 'BUSINESS_ACCOUNT';
+  accountId: string;
+  totalDebit: number;
+  totalCredit: number;
+  netBalance: number;
+  accountCode: string;
+  accountName: string;
+  liveBalance: number | null;
+  currency: string;
+  entityName?: string | null;
+};
+
+export function fetchReportJournalEntries(
+  token: string,
+  params: { cursor?: string; limit?: number; startDate?: string; endDate?: string; referenceType?: string } = {},
+) {
+  const qs = new URLSearchParams();
+  if (params.cursor) qs.set('cursor', params.cursor);
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
+  if (params.referenceType) qs.set('referenceType', params.referenceType);
+  const query = qs.toString();
+  return request<{ items: JournalEntryRecord[]; nextCursor: string | null; hasMore: boolean; startDate: string; endDate: string }>(
+    `/api/admin/reports/journal-entries${query ? `?${query}` : ''}`,
+    { token },
+  );
+}
+
+export function fetchReportJournalEntryDetail(token: string, entryId: string) {
+  return request<JournalEntryRecord>(`/api/admin/reports/journal-entries/${entryId}`, { token });
+}
+
+export function fetchReportTrialBalance(
+  token: string,
+  params: { cursor?: string; limit?: number; startDate?: string; endDate?: string; accountType?: 'CUSTOMER_WALLET' | 'BUSINESS_ACCOUNT' } = {},
+) {
+  const qs = new URLSearchParams();
+  if (params.cursor) qs.set('cursor', params.cursor);
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
+  if (params.accountType) qs.set('accountType', params.accountType);
+  const query = qs.toString();
+  return request<{
+    rows: TrialBalanceRow[];
+    totals: { totalDebit: number; totalCredit: number; balanced: boolean };
+    nextCursor: string | null;
+    hasMore: boolean;
+    startDate: string;
+    endDate: string;
+  }>(`/api/admin/reports/trial-balance${query ? `?${query}` : ''}`, { token });
+}
+
 const EXPORT_PAGE_SIZE = 100;
 const EXPORT_MAX_ROWS = 5000;
 
@@ -508,6 +589,85 @@ export async function fetchAllReportFundingOrders(
       limit: EXPORT_PAGE_SIZE,
     });
     items.push(...orders);
+    if (!nextCursor || items.length >= EXPORT_MAX_ROWS) {
+      truncated = Boolean(nextCursor) || items.length > EXPORT_MAX_ROWS;
+      break;
+    }
+    cursor = nextCursor;
+  }
+
+  return { items: items.slice(0, EXPORT_MAX_ROWS), truncated };
+}
+
+export type ReportEmailNotification = {
+  id: string;
+  recipientEmail: string;
+  template: 'OTP_SIGN_IN' | 'WELCOME' | 'CARD_READY';
+  audience: 'CUSTOMER' | 'ADMIN';
+  subject: string;
+  body: string;
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  resendMessageId: string | null;
+  errorMessage: string | null;
+  metadata: unknown;
+  createdAt: string;
+  user: {
+    id: string;
+    email: string;
+    firstName: string | null;
+    lastName: string | null;
+    adminUser: boolean;
+  } | null;
+};
+
+export function fetchReportEmailNotifications(
+  token: string,
+  params: {
+    cursor?: string;
+    limit?: number;
+    startDate?: string;
+    endDate?: string;
+    template?: string;
+    status?: string;
+    email?: string;
+  } = {},
+) {
+  const qs = new URLSearchParams();
+  if (params.cursor) qs.set('cursor', params.cursor);
+  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
+  if (params.template) qs.set('template', params.template);
+  if (params.status) qs.set('status', params.status);
+  if (params.email) qs.set('email', params.email);
+  const query = qs.toString();
+  return request<{ notifications: ReportEmailNotification[]; nextCursor: string | null; limit: number }>(
+    `/api/admin/reports/email-notifications${query ? `?${query}` : ''}`,
+    { token },
+  );
+}
+
+export async function fetchAllReportEmailNotifications(
+  token: string,
+  params: {
+    startDate?: string;
+    endDate?: string;
+    template?: string;
+    status?: string;
+    email?: string;
+  },
+): Promise<{ items: ReportEmailNotification[]; truncated: boolean }> {
+  const items: ReportEmailNotification[] = [];
+  let cursor: string | undefined;
+  let truncated = false;
+
+  while (items.length < EXPORT_MAX_ROWS) {
+    const { notifications, nextCursor } = await fetchReportEmailNotifications(token, {
+      ...params,
+      cursor,
+      limit: EXPORT_PAGE_SIZE,
+    });
+    items.push(...notifications);
     if (!nextCursor || items.length >= EXPORT_MAX_ROWS) {
       truncated = Boolean(nextCursor) || items.length > EXPORT_MAX_ROWS;
       break;
@@ -697,6 +857,9 @@ export function deleteGroup(token: string, groupId: string) {
 }
 
 export type CatalogStatus = 'ACTIVE' | 'INACTIVE';
+export type BusinessEntityType = 'VENDOR_INCOME';
+export type BusinessAccountPurpose = 'FEE_INCOME' | 'FUND_HOLDING' | 'SETTLEMENT' | 'OTHER';
+export type BusinessAccountTxnType = 'CREDIT' | 'DEBIT';
 export type ServiceType = 'INTERNAL' | 'EXTERNAL' | 'INTERNATIONAL';
 export type ServiceBehaviour = 'TRANSACTIONAL' | 'NON_TRANSACTIONAL';
 export type DenominationUnitType = 'FLEX' | 'FIXED';
@@ -732,6 +895,14 @@ export type ProductSummary = {
   expiryDate: string | null;
   currency: string;
   status: CatalogStatus;
+  fundHoldingAccountId: string | null;
+  fundHoldingAccount: {
+    id: string;
+    code: string;
+    name: string;
+    purpose: BusinessAccountPurpose;
+    currency: string;
+  } | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -835,6 +1006,7 @@ export function createProduct(
     expiryDate?: string | null;
     currency: string;
     status?: CatalogStatus;
+    fundHoldingAccountId?: string | null;
   },
 ) {
   return request<ProductSummary>('/api/admin/products', {
@@ -859,6 +1031,7 @@ export function updateProduct(
     expiryDate: string | null;
     currency: string;
     status: CatalogStatus;
+    fundHoldingAccountId: string | null;
   }>,
 ) {
   return request<ProductSummary>(`/api/admin/products/${productId}`, {
@@ -943,6 +1116,14 @@ export type SettlementRequestSummary = {
   startDate: string | null;
   expiryDate: string | null;
   status: CatalogStatus;
+  feeDestinationAccountId: string | null;
+  feeDestinationAccount: {
+    id: string;
+    code: string;
+    name: string;
+    purpose: BusinessAccountPurpose;
+    currency: string;
+  } | null;
   product: { id: string; code: string; name: string; displayName: string; currency: string };
   ucp: { id: string; code: string; name: string; unit: UcpUnit; ucpType: UcpType };
   createdAt: string;
@@ -965,6 +1146,7 @@ export function createSettlementRequest(
     startDate?: string | null;
     expiryDate?: string | null;
     status?: CatalogStatus;
+    feeDestinationAccountId?: string | null;
   },
 ) {
   return request<SettlementRequestSummary>('/api/admin/settlement-requests', {
@@ -986,6 +1168,7 @@ export function updateSettlementRequest(
     startDate: string | null;
     expiryDate: string | null;
     status: CatalogStatus;
+    feeDestinationAccountId: string | null;
   }>,
 ) {
   return request<SettlementRequestSummary>(`/api/admin/settlement-requests/${id}`, {
@@ -997,6 +1180,161 @@ export function updateSettlementRequest(
 
 export function deleteSettlementRequest(token: string, id: string) {
   return request<void>(`/api/admin/settlement-requests/${id}`, { method: 'DELETE', token });
+}
+
+export type BusinessEntitySummary = {
+  id: string;
+  code: string;
+  name: string;
+  type: BusinessEntityType;
+  description: string | null;
+  status: CatalogStatus;
+  accountCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BusinessAccountSummary = {
+  id: string;
+  entityId: string;
+  code: string;
+  name: string;
+  currency: string;
+  purpose: BusinessAccountPurpose;
+  balance: number;
+  status: CatalogStatus;
+  entity: { id: string; code: string; name: string; type: BusinessEntityType };
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type BusinessAccountTransaction = {
+  id: string;
+  accountId: string;
+  type: BusinessAccountTxnType;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  referenceType: string;
+  referenceId: string;
+  productCode: string | null;
+  ucpCode: string | null;
+  description: string | null;
+  createdAt: string;
+};
+
+export function fetchBusinessEntities(token: string) {
+  return request<BusinessEntitySummary[]>('/api/admin/business-entities', { token });
+}
+
+export function createBusinessEntity(
+  token: string,
+  data: {
+    code: string;
+    name: string;
+    type: BusinessEntityType;
+    description?: string;
+    status?: CatalogStatus;
+  },
+) {
+  return request<BusinessEntitySummary>('/api/admin/business-entities', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateBusinessEntity(
+  token: string,
+  id: string,
+  data: Partial<{
+    code: string;
+    name: string;
+    type: BusinessEntityType;
+    description: string | null;
+    status: CatalogStatus;
+  }>,
+) {
+  return request<BusinessEntitySummary>(`/api/admin/business-entities/${id}`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBusinessEntity(token: string, id: string) {
+  return request<void>(`/api/admin/business-entities/${id}`, { method: 'DELETE', token });
+}
+
+export function fetchBusinessAccounts(
+  token: string,
+  params?: { entityId?: string; purpose?: BusinessAccountPurpose },
+) {
+  const search = new URLSearchParams();
+  if (params?.entityId) search.set('entityId', params.entityId);
+  if (params?.purpose) search.set('purpose', params.purpose);
+  const query = search.toString() ? `?${search.toString()}` : '';
+  return request<BusinessAccountSummary[]>(`/api/admin/business-accounts${query}`, { token });
+}
+
+export function createBusinessAccount(
+  token: string,
+  data: {
+    entityId: string;
+    code: string;
+    name: string;
+    currency: string;
+    purpose: BusinessAccountPurpose;
+    status?: CatalogStatus;
+  },
+) {
+  return request<BusinessAccountSummary>('/api/admin/business-accounts', {
+    method: 'POST',
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateBusinessAccount(
+  token: string,
+  id: string,
+  data: Partial<{
+    code: string;
+    name: string;
+    currency: string;
+    purpose: BusinessAccountPurpose;
+    status: CatalogStatus;
+  }>,
+) {
+  return request<BusinessAccountSummary>(`/api/admin/business-accounts/${id}`, {
+    method: 'PATCH',
+    token,
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBusinessAccount(token: string, id: string) {
+  return request<void>(`/api/admin/business-accounts/${id}`, { method: 'DELETE', token });
+}
+
+export function fetchBusinessAccountTransactions(
+  token: string,
+  accountId: string,
+  params?: { cursor?: string; limit?: number; startDate?: string; endDate?: string },
+) {
+  const search = new URLSearchParams();
+  if (params?.cursor) search.set('cursor', params.cursor);
+  if (params?.limit) search.set('limit', String(params.limit));
+  if (params?.startDate) search.set('startDate', params.startDate);
+  if (params?.endDate) search.set('endDate', params.endDate);
+  const query = search.toString() ? `?${search.toString()}` : '';
+  return request<{
+    items: BusinessAccountTransaction[];
+    nextCursor: string | null;
+    hasMore: boolean;
+    startDate: string;
+    endDate: string;
+  }>(`/api/admin/business-accounts/${accountId}/transactions${query}`, { token });
 }
 
 export type ExchangeRateSnapshotRecord = {

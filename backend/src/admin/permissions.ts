@@ -15,6 +15,7 @@ export const MODULES = [
   'system-config-ucps',
   'system-config-settlements',
   'system-config-exchange-rates',
+  'system-config-business-entities',
 ] as const;
 
 export const SYSTEM_CONFIG_MODULES = [
@@ -26,6 +27,7 @@ export const SYSTEM_CONFIG_MODULES = [
   'system-config-ucps',
   'system-config-settlements',
   'system-config-exchange-rates',
+  'system-config-business-entities',
 ] as const;
 
 export const ACTIONS = ['view', 'edit', 'delete'] as const;
@@ -57,6 +59,7 @@ const MODULE_ACTION_OVERRIDES: Partial<Record<ModuleKey, readonly ActionKey[]>> 
   'system-config-ucps': SYSTEM_CONFIG_ACTIONS,
   'system-config-settlements': SYSTEM_CONFIG_ACTIONS,
   'system-config-exchange-rates': EXCHANGE_RATES_ACTIONS,
+  'system-config-business-entities': SYSTEM_CONFIG_ACTIONS,
 };
 
 export function actionsForModule(moduleKey: string): readonly ActionKey[] {

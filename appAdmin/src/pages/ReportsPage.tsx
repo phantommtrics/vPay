@@ -190,7 +190,7 @@ export function ReportsPage() {
   return (
     <>
       <PageHeader
-        title="Reports"
+        title="Transaction reports"
         description="Wallet ledger and funding activity with date-filtered exports."
         actions={<ExportMenu disabled={active.loading} onExport={handleExport} />}
       />

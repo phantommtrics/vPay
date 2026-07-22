@@ -1,4 +1,5 @@
 import {
+  AccountStatus,
   DirectPayProvisioningStatus,
   KycStatus,
   Prisma,
@@ -310,6 +311,15 @@ function hasPersonalDetails(fields: {
 
 export async function findUserByEmail(email: string): Promise<User | null> {
   return prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+}
+
+/** Lookup by email that ignores terminated accounts (email is rewritten on terminate). */
+export async function findActiveUserByEmail(email: string): Promise<User | null> {
+  const user = await findUserByEmail(email);
+  if (!user || user.accountStatus === AccountStatus.TERMINATED) {
+    return null;
+  }
+  return user;
 }
 
 export async function findUserById(id: string): Promise<User | null> {

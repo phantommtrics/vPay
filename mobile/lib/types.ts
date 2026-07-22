@@ -200,6 +200,8 @@ export type WalletTransactionSummary = {
 export type CardFundTransactionSummary = {
   id: string;
   amountGmd: number;
+  feeGmd: number;
+  totalGmd: number;
   amountUsd: number;
   exchangeRate: number;
   stripeBalanceBeforeUsd: number;

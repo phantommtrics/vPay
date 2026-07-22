@@ -17,10 +17,12 @@ import {
 import {
   createSettlementRequest,
   deleteSettlementRequest,
+  fetchBusinessAccounts,
   fetchProducts,
   fetchSettlementRequests,
   fetchUcps,
   updateSettlementRequest,
+  type BusinessAccountSummary,
   type CatalogStatus,
   type ProductSummary,
   type SettlementRequestSummary,
@@ -39,6 +41,7 @@ type SettlementForm = {
   startDate: string;
   expiryDate: string;
   status: CatalogStatus;
+  feeDestinationAccountId: string;
 };
 
 function emptyForm(productId = '', ucpId = ''): SettlementForm {
@@ -51,6 +54,7 @@ function emptyForm(productId = '', ucpId = ''): SettlementForm {
     startDate: '',
     expiryDate: '',
     status: 'ACTIVE',
+    feeDestinationAccountId: '',
   };
 }
 
@@ -64,6 +68,7 @@ function rowToForm(row: SettlementRequestSummary): SettlementForm {
     startDate: toDateInput(row.startDate),
     expiryDate: toDateInput(row.expiryDate),
     status: row.status,
+    feeDestinationAccountId: row.feeDestinationAccountId ?? '',
   };
 }
 
@@ -77,6 +82,7 @@ function toPayload(form: SettlementForm) {
     startDate: form.startDate ? `${form.startDate}T00:00:00.000Z` : null,
     expiryDate: form.expiryDate ? `${form.expiryDate}T23:59:59.999Z` : null,
     status: form.status,
+    feeDestinationAccountId: form.feeDestinationAccountId || null,
   };
 }
 
@@ -84,6 +90,7 @@ export function SettlementRequestsPage() {
   const [rows, setRows] = useState<SettlementRequestSummary[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [ucps, setUcps] = useState<UcpSummary[]>([]);
+  const [feeAccounts, setFeeAccounts] = useState<BusinessAccountSummary[]>([]);
   const [filterProductId, setFilterProductId] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -115,14 +122,16 @@ export function SettlementRequestsPage() {
 
   const loadData = useCallback(async () => {
     if (!token) return;
-    const [settlementList, productList, ucpList] = await Promise.all([
+    const [settlementList, productList, ucpList, accountList] = await Promise.all([
       fetchSettlementRequests(token, filterProductId || undefined),
       fetchProducts(token),
       fetchUcps(token),
+      fetchBusinessAccounts(token, { purpose: 'FEE_INCOME' }),
     ]);
     setRows(settlementList);
     setProducts(productList);
     setUcps(ucpList);
+    setFeeAccounts(accountList);
     return { productList, ucpList };
   }, [token, filterProductId]);
 
@@ -275,6 +284,21 @@ export function SettlementRequestsPage() {
             className={catalogInputClass}
           />
         </div>
+        <div className="sm:col-span-2">
+          <label className={catalogLabelClass}>Fee destination account</label>
+          <select
+            value={value.feeDestinationAccountId}
+            disabled={disabled}
+            onChange={(e) => onChange({ ...value, feeDestinationAccountId: e.target.value })}
+            className={catalogInputClass}>
+            <option value="">None</option>
+            {feeAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name} ({account.code})
+              </option>
+            ))}
+          </select>
+        </div>
         <div>
           <label className={catalogLabelClass}>Status</label>
           <select
@@ -415,6 +439,14 @@ export function SettlementRequestsPage() {
                       <div>
                         <dt className={catalogLabelClass}>Priority</dt>
                         <dd className="text-sm text-[var(--color-heading)]">{form.priority}</dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className={catalogLabelClass}>Fee destination account</dt>
+                        <dd className="text-sm text-[var(--color-heading)]">
+                          {selected.feeDestinationAccount
+                            ? `${selected.feeDestinationAccount.name} (${selected.feeDestinationAccount.code})`
+                            : '—'}
+                        </dd>
                       </div>
                       <div>
                         <dt className={catalogLabelClass}>Status</dt>

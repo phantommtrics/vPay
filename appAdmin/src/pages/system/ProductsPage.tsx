@@ -17,9 +17,11 @@ import {
 import {
   createProduct,
   deleteProduct,
+  fetchBusinessAccounts,
   fetchProducts,
   fetchServices,
   updateProduct,
+  type BusinessAccountSummary,
   type CatalogStatus,
   type DenominationUnitType,
   type ProductSummary,
@@ -44,6 +46,7 @@ type ProductForm = {
   expiryDate: string;
   currency: string;
   status: CatalogStatus;
+  fundHoldingAccountId: string;
 };
 
 function emptyForm(serviceId = ''): ProductForm {
@@ -59,6 +62,7 @@ function emptyForm(serviceId = ''): ProductForm {
     expiryDate: '',
     currency: 'GMD',
     status: 'ACTIVE',
+    fundHoldingAccountId: '',
   };
 }
 
@@ -75,6 +79,7 @@ function productToForm(product: ProductSummary): ProductForm {
     expiryDate: toDateInput(product.expiryDate),
     currency: product.currency,
     status: product.status,
+    fundHoldingAccountId: product.fundHoldingAccountId ?? '',
   };
 }
 
@@ -91,12 +96,14 @@ function toPayload(form: ProductForm) {
     expiryDate: form.expiryDate ? `${form.expiryDate}T23:59:59.999Z` : null,
     currency: form.currency.trim().toUpperCase(),
     status: form.status,
+    fundHoldingAccountId: form.fundHoldingAccountId || null,
   };
 }
 
 export function ProductsPage() {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [services, setServices] = useState<ServiceSummary[]>([]);
+  const [fundHoldingAccounts, setFundHoldingAccounts] = useState<BusinessAccountSummary[]>([]);
   const [filterServiceId, setFilterServiceId] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -128,12 +135,14 @@ export function ProductsPage() {
 
   const loadData = useCallback(async () => {
     if (!token) return;
-    const [productList, serviceList] = await Promise.all([
+    const [productList, serviceList, accountList] = await Promise.all([
       fetchProducts(token, filterServiceId || undefined),
       fetchServices(token),
+      fetchBusinessAccounts(token, { purpose: 'FUND_HOLDING' }),
     ]);
     setProducts(productList);
     setServices(serviceList);
+    setFundHoldingAccounts(accountList);
     return serviceList;
   }, [token, filterServiceId]);
 
@@ -344,6 +353,14 @@ export function ProductsPage() {
                         <dd className="text-sm text-[var(--color-heading)]">{formatDisplayDate(form.expiryDate)}</dd>
                       </div>
                       <div>
+                        <dt className={catalogLabelClass}>Fund holding account</dt>
+                        <dd className="text-sm text-[var(--color-heading)]">
+                          {selected.fundHoldingAccount
+                            ? `${selected.fundHoldingAccount.name} (${selected.fundHoldingAccount.code})`
+                            : '—'}
+                        </dd>
+                      </div>
+                      <div>
                         <dt className={catalogLabelClass}>Status</dt>
                         <dd className="text-sm text-[var(--color-heading)]">{formatCatalogEnum(form.status)}</dd>
                       </div>
@@ -473,6 +490,23 @@ export function ProductsPage() {
                           onChange={(e) => editor.setForm({ ...form, expiryDate: e.target.value })}
                           className={catalogInputClass}
                         />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className={catalogLabelClass}>Fund holding account</label>
+                        <select
+                          value={form.fundHoldingAccountId}
+                          disabled={fieldsDisabled}
+                          onChange={(e) =>
+                            editor.setForm({ ...form, fundHoldingAccountId: e.target.value })
+                          }
+                          className={catalogInputClass}>
+                          <option value="">None</option>
+                          {fundHoldingAccounts.map((account) => (
+                            <option key={account.id} value={account.id}>
+                              {account.name} ({account.code})
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       <div>
                         <label className={catalogLabelClass}>Status</label>

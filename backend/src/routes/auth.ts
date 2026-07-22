@@ -1,3 +1,4 @@
+import { AccountStatus } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
@@ -5,10 +6,15 @@ import { z } from 'zod';
 import { prisma } from '../db.js';
 import { signToken, verifyToken } from '../auth.js';
 import {
+  ACCOUNT_DELETE_CONFIRMATION,
+  AccountTerminateError,
+  terminateAccount,
+} from '../account/terminate.js';
+import {
   canEditKyc,
   createUser,
   deleteOtp,
-  findUserByEmail,
+  findActiveUserByEmail,
   findUserById,
   getLatestOtp,
   saveOtp,
@@ -63,13 +69,21 @@ const deviceLockSchema = z.object({
   device: deviceInfoSchema.optional(),
 });
 
+const deleteAccountSchema = z.object({
+  confirmation: z.string().min(1),
+});
+
 function generateOtp(): string {
   return String(randomInt(100000, 999999));
 }
 
 export type AuthedRequest = Request & { userId?: string };
 
-export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction): void {
+export async function requireAuth(
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
   const header = req.headers.authorization;
   if (!header?.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Unauthorized' });
@@ -78,6 +92,11 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
 
   try {
     const payload = verifyToken(header.slice(7));
+    const user = await findUserById(payload.sub);
+    if (!user || user.accountStatus === AccountStatus.TERMINATED) {
+      res.status(401).json({ error: 'Invalid or expired session' });
+      return;
+    }
     req.userId = payload.sub;
     next();
   } catch {
@@ -94,7 +113,7 @@ export async function handleSendOtp(req: Request, res: Response): Promise<void> 
 
   const email = parsed.data.email.toLowerCase();
   const deviceInput = parsed.data.device;
-  const existingUser = await findUserByEmail(email);
+  const existingUser = await findActiveUserByEmail(email);
 
   if (existingUser && deviceInput) {
     try {
@@ -175,7 +194,7 @@ export async function handleVerifyOtp(req: Request, res: Response): Promise<void
 
   await deleteOtp(email);
 
-  let user = await findUserByEmail(email);
+  let user = await findActiveUserByEmail(email);
   if (!user) {
     user = await createUser(email);
     log('New user created', { userId: user.id, email });
@@ -351,5 +370,34 @@ export async function handleUpdateProfile(req: AuthedRequest, res: Response): Pr
     res.status(403).json({
       error: err instanceof Error ? err.message : 'Cannot update profile',
     });
+  }
+}
+
+export async function handleDeleteAccount(req: AuthedRequest, res: Response): Promise<void> {
+  const parsed = deleteAccountSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({
+      error: `Type ${ACCOUNT_DELETE_CONFIRMATION} to confirm account deletion`,
+    });
+    return;
+  }
+
+  try {
+    await terminateAccount(req.userId!, parsed.data.confirmation);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof AccountTerminateError) {
+      res.status(err.status).json({
+        error: err.message,
+        code: err.code,
+        ...(err.details ?? {}),
+      });
+      return;
+    }
+    log('Account deletion failed', {
+      userId: req.userId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    res.status(500).json({ error: 'Failed to delete account' });
   }
 }

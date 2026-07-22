@@ -3,7 +3,11 @@ import {
   calculateWalletTopupFeeFromPricing,
   type WalletTopupFeePricing,
 } from './calculator.js';
-import { resolveScalarFromSettlement, resolveUcpForProduct } from './resolver.js';
+import {
+  resolveFirstFeeUcpForProduct,
+  resolveScalarFromSettlement,
+  resolveUcpForProduct,
+} from './resolver.js';
 import {
   getPlatformConfigCache,
   setPlatformConfigCache,
@@ -131,6 +135,56 @@ export async function calculateWalletTopupFee(amountGmd: number): Promise<{
 
   return {
     walletTopupFee: pricing,
+    feePercent,
+    feeGmd,
+    totalGmd: amountGmd + feeGmd,
+  };
+}
+
+export async function getCardFundFeePricing(): Promise<WalletTopupFeePricing> {
+  const env = envPlatformConfig();
+  try {
+    const ucp =
+      (await resolveFirstFeeUcpForProduct(PRODUCT_CODES.CARD_FUND)) ??
+      (await resolveUcpForProduct(PRODUCT_CODES.CARD_FUND, UCP_CODES.CARD_FUND_FEE_PERCENT));
+    if (!ucp) {
+      return { type: 'fixed', feePercent: env.feePercent };
+    }
+    if (ucp.ucpType === 'SLAB') {
+      return {
+        type: 'slab',
+        slabs: ucp.slabs.map((slab) => ({
+          minAmount: slab.minAmount,
+          maxAmount: slab.maxAmount,
+          value: slab.value,
+          valueType: slab.valueType,
+          sortOrder: slab.sortOrder,
+        })),
+      };
+    }
+    return { type: 'fixed', feePercent: ucp.fixedValue ?? env.feePercent };
+  } catch {
+    return { type: 'fixed', feePercent: env.feePercent };
+  }
+}
+
+export async function calculateCardFundFee(amountGmd: number): Promise<{
+  feeGmd: number;
+  totalGmd: number;
+  feePercent: number;
+  cardFundFee: WalletTopupFeePricing;
+}> {
+  const pricing = await getCardFundFeePricing();
+  const feeGmd = calculateWalletTopupFeeFromPricing(pricing, amountGmd);
+  const feePercent =
+    pricing.type === 'fixed'
+      ? pricing.feePercent
+      : amountGmd > 0
+        ? feeGmd / amountGmd
+        : 0;
+
+  return {
+    cardFundFee: pricing,
     feePercent,
     feeGmd,
     totalGmd: amountGmd + feeGmd,
