@@ -43,8 +43,7 @@ Enable the site and test nginx:
 
 ```bash
 sudo ln -sf /etc/nginx/sites-available/api.vpayafrica.conf /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+sudo nginx -t && sudo systemctl reload nginx
 ```
 
 **Important:** Ensure your **backend is running** on port 3001 (e.g. `PORT=3001 node dist/index.js` or your process manager). Nginx proxies to `http://127.0.0.1:3001`.

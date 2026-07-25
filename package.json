@@ -17,6 +17,7 @@
     "mobile:build:android:preview": "npm run build:android:preview --prefix mobile",
     "mobile:submit:android": "npm run submit:android --prefix mobile",
     "backend": "npm run dev --prefix backend",
+    "backend:build": "npm run build --prefix backend",
     "backend:start": "npm run start --prefix backend",
     "backend:setup": "bash backend/setup.sh",
     "backend:db:migrate": "npm run db:migrate --prefix backend",

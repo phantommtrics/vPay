@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --import tsx src/index.ts",
+    "build": "prisma generate && tsc",
+    "start": "node dist/index.js",
     "dev": "node --watch --import tsx src/index.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
