@@ -33,9 +33,11 @@ function formatAccountType(type: string) {
 function JournalEntriesPanel({
   dateRange,
   limit,
+  onLimitChange,
 }: {
   dateRange: DateRange;
   limit: number;
+  onLimitChange: (limit: number) => void;
 }) {
   const token = getAdminToken();
   const dateFilterKey = `${dateRange.startDate}:${dateRange.endDate}`;
@@ -164,6 +166,8 @@ function JournalEntriesPanel({
         canGoForward={pager.canGoForward}
         onPrev={pager.goPrev}
         onNext={pager.goNext}
+        limit={limit}
+        onLimitChange={onLimitChange}
         itemCount={pager.items.length}
         loading={pager.loading}
       />
@@ -174,10 +178,12 @@ function JournalEntriesPanel({
 function TrialBalancePanel({
   dateRange,
   limit,
+  onLimitChange,
   accountType,
 }: {
   dateRange: DateRange;
   limit: number;
+  onLimitChange: (limit: number) => void;
   accountType: 'CUSTOMER_WALLET' | 'BUSINESS_ACCOUNT' | '';
 }) {
   const token = getAdminToken();
@@ -288,6 +294,8 @@ function TrialBalancePanel({
         canGoForward={pager.canGoForward}
         onPrev={pager.goPrev}
         onNext={pager.goNext}
+        limit={limit}
+        onLimitChange={onLimitChange}
         itemCount={pager.items.length}
         loading={pager.loading}
       />
@@ -319,7 +327,7 @@ export function JournalReportPage() {
             { id: 'entries', label: 'Journal entries' },
             { id: 'trial-balance', label: 'Trial balance' },
           ]}
-          value={tab}
+          active={tab}
           onChange={setTab}
         />
 
@@ -397,9 +405,14 @@ export function JournalReportPage() {
         </div>
 
         {tab === 'entries' ? (
-          <JournalEntriesPanel dateRange={appliedRange} limit={limit} />
+          <JournalEntriesPanel dateRange={appliedRange} limit={limit} onLimitChange={setLimit} />
         ) : (
-          <TrialBalancePanel dateRange={appliedRange} limit={limit} accountType={trialAccountType} />
+          <TrialBalancePanel
+            dateRange={appliedRange}
+            limit={limit}
+            onLimitChange={setLimit}
+            accountType={trialAccountType}
+          />
         )}
       </div>
     </div>

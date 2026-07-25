@@ -210,6 +210,8 @@ function AccountTransactionsPanel({
             canGoForward={pager.canGoForward}
             onPrev={pager.goPrev}
             onNext={pager.goNext}
+            limit={limit}
+            onLimitChange={setLimit}
             itemCount={pager.items.length}
             loading={pager.loading}
           />
@@ -467,6 +469,9 @@ export function BusinessEntitiesPage() {
         </p>
       ) : null}
 
+      {loading ? (
+        <p className="text-sm text-[var(--color-text-muted)]">Loading business entities…</p>
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <CatalogList
           items={entityListItems}
@@ -612,7 +617,7 @@ export function BusinessEntitiesPage() {
                           type="button"
                           onClick={() => {
                             setSelectedAccountId(account.id);
-                            accountEditor.cancel();
+                            accountEditor.cancelEdit();
                           }}
                           className={`w-full rounded-md px-3 py-2 text-left text-sm transition ${
                             selectedAccountId === account.id
@@ -746,6 +751,7 @@ export function BusinessEntitiesPage() {
           ) : null}
         </div>
       </div>
+      )}
 
       {showEntityForm ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">

@@ -197,7 +197,7 @@ function DocumentLightbox({
 export function DocumentViewer({ frontUrl, backUrl, selfieUrl }: DocumentViewerProps) {
   const front = assetUrl(frontUrl);
   const back = assetUrl(backUrl);
-  const selfie = assetUrl(selfieUrl);
+  const selfie = assetUrl(selfieUrl ?? null);
   const [frontError, setFrontError] = useState(false);
   const [backError, setBackError] = useState(false);
   const [selfieError, setSelfieError] = useState(false);

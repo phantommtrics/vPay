@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Smartphone } from 'lucide-react';
 
 import { PageHeader } from '../../components/ui/PageHeader';
-import { Badge } from '../../components/ui/Badge';
 import { CopyId } from '../../components/ui/CopyId';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { fetchCustomerDeviceGroups, type CustomerDeviceGroupSummary } from '../../lib/api';
