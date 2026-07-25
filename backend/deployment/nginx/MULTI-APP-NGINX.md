@@ -1,5 +1,8 @@
 # Hosting vPay alongside other apps on one server
 
+**Ticketing is a PHP app** (previously Apache2). nginx serves it via **php-fpm**, not Node.  
+Full guide: [NGINX-VPAY-TICKETING.md](./NGINX-VPAY-TICKETING.md)
+
 If ticketing (or other) requests show up in vPay logs as 404s — e.g. `GET /ticketing/dashboard` — nginx is sending traffic to the vPay backend (`127.0.0.1:3001`) that belongs to another app.
 
 vPay only serves `/health`, `/api/*`, and `/uploads/*`. Everything else correctly returns 404 from vPay; the fix is nginx routing, not the Node app.
@@ -177,6 +180,38 @@ curl -s -o /dev/null -w "%{http_code}\n" https://ticketing.yourdomain.com/ticket
 
 # vPay logs should stop showing /ticketing/* requests
 pm2 logs vpay-africa-backend --lines 20
+```
+
+---
+
+# Ticketing on its own domain (example: aps-ticketing.apswallet.gm)
+
+Ticketing is a **PHP application** that used to run on **Apache2**. After moving to nginx:
+
+1. **Keep Apache stopped** (or disabled) so it does not bind port 80/443
+2. **Run php-fpm** — nginx cannot execute PHP without it
+3. **Point `ticketing.config` at the PHP files** Apache used — not `/var/www/vpay-admin`, not port 3001
+
+If ticketing shows **vPay Admin** at `https://aps-ticketing.apswallet.gm/ticketing/`, the ticketing nginx site is misconfigured.
+
+**vPay** → `api.vpayafrica.phantommetrics.gm` → `/var/www/vpay-admin` + `/api/` → Node port 3001  
+**Ticketing** → `aps-ticketing.apswallet.gm` → `/ticketing/` → **php-fpm** + PHP document root
+
+Example config: [ticketing.example.conf](./ticketing.example.conf)  
+Step-by-step: [NGINX-VPAY-TICKETING.md](./NGINX-VPAY-TICKETING.md)
+
+```bash
+# Find where Apache served ticketing from
+grep -r DocumentRoot /etc/apache2/sites-enabled/
+
+# php-fpm socket
+ls /run/php/*.sock
+
+sudo nano /etc/nginx/sites-available/ticketing.config
+sudo nginx -t && sudo systemctl reload nginx
+
+curl -s https://aps-ticketing.apswallet.gm/ticketing/ | grep '<title>'
+# Should NOT say "vPay Admin"
 ```
 
 ---

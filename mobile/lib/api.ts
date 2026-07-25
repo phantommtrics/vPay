@@ -140,14 +140,16 @@ export async function deleteAccount(confirmation: string): Promise<void> {
 export async function uploadKycDocument(
   side: 'front' | 'back' | 'selfie',
   uri: string,
+  mimeType?: string | null,
 ): Promise<User> {
   const token = await getToken();
   const form = new FormData();
   const filename = uri.split('/').pop() ?? `${side}.jpg`;
+  const contentType = mimeType?.startsWith('image/') ? mimeType : 'image/jpeg';
 
   form.append('file', {
     uri,
-    type: 'image/jpeg',
+    type: contentType,
     name: filename,
   } as unknown as Blob);
 
@@ -167,7 +169,11 @@ export async function uploadKycDocument(
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new ApiError(data.error ?? 'Upload failed', response.status);
+    const fallback =
+      response.status === 413
+        ? 'Image is too large. Try a smaller photo or retake with the camera.'
+        : 'Upload failed';
+    throw new ApiError(data.error ?? fallback, response.status);
   }
 
   return (data as { user: User }).user;

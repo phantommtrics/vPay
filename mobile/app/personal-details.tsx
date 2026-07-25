@@ -24,6 +24,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInRight, FadeOutLeft } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -32,6 +33,11 @@ import { CountrySelect } from '@/components/CountrySelect';
 import { DocumentTypeSelect } from '@/components/DocumentTypeSelect';
 import { DocumentUpload } from '@/components/DocumentUpload';
 import { useAuth } from '@/contexts/AuthContext';
+import { resolveImagePickerResult } from '@/lib/image-picker-result';
+import {
+  clearPendingKycPicker,
+  getPendingKycPicker,
+} from '@/lib/kyc-picker-recovery';
 import { canEditKyc, getDocumentTypeLabel, isKycApproved, isKycPending } from '@/lib/kyc';
 import { getCountryCode, getCountryName, type CountryCode } from '@/lib/countries';
 import type { DocumentType, KycSubmitPayload, ProfileUpdate, User } from '@/lib/types';
@@ -93,6 +99,44 @@ export default function PersonalDetailsScreen() {
     if (!user) return;
     setDocumentType((user.documentType as DocumentType | null) ?? null);
   }, [user?.documentType, user?.documentFrontUrl, user?.documentBackUrl, user?.selfieUrl]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !user || !editable) return;
+
+    let cancelled = false;
+
+    async function recoverPendingPickerUpload() {
+      const side = await getPendingKycPicker();
+      if (!side || cancelled) return;
+
+      const pending = await ImagePicker.getPendingResultAsync();
+      if (!pending || 'code' in pending) {
+        await clearPendingKycPicker();
+        return;
+      }
+
+      const resolved = await resolveImagePickerResult(pending);
+      if (!resolved || cancelled) {
+        await clearPendingKycPicker();
+        return;
+      }
+
+      const asset = resolved.assets[0];
+      try {
+        await uploadKycDocument(side, asset.uri, asset.mimeType);
+      } catch {
+        // User can retry manually from the upload screen.
+      } finally {
+        await clearPendingKycPicker();
+      }
+    }
+
+    void recoverPendingPickerUpload();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, editable, uploadKycDocument]);
 
   if (!user) return null;
 
@@ -353,14 +397,16 @@ export default function PersonalDetailsScreen() {
                   label="Front of document"
                   hint="Clear photo of the front side"
                   required
+                  recoveryKey="front"
                   value={user.documentFrontUrl}
-                  onUpload={(uri) => uploadKycDocument('front', uri)}
+                  onUpload={(uri, mimeType) => uploadKycDocument('front', uri, mimeType)}
                 />
                 <DocumentUpload
                   label="Back of document"
                   hint="Required for ID cards with information on the reverse"
+                  recoveryKey="back"
                   value={user.documentBackUrl}
-                  onUpload={(uri) => uploadKycDocument('back', uri)}
+                  onUpload={(uri, mimeType) => uploadKycDocument('back', uri, mimeType)}
                 />
               </View>
             ) : null}
@@ -377,10 +423,11 @@ export default function PersonalDetailsScreen() {
                   label="Selfie photo"
                   hint="We will compare this photo to the face on your ID document"
                   required
+                  recoveryKey="selfie"
                   value={user.selfieUrl}
                   cameraFacing="front"
                   primaryAction="camera"
-                  onUpload={(uri) => uploadKycDocument('selfie', uri)}
+                  onUpload={(uri, mimeType) => uploadKycDocument('selfie', uri, mimeType)}
                 />
               </View>
             ) : null}

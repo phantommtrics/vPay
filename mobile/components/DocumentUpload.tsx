@@ -13,6 +13,12 @@ import {
 
 import { useAppLock } from '@/contexts/AppLockContext';
 import { assetUrl } from '@/lib/api';
+import { resolveImagePickerResult } from '@/lib/image-picker-result';
+import {
+  clearPendingKycPicker,
+  markPendingKycPicker,
+  type KycPickerSide,
+} from '@/lib/kyc-picker-recovery';
 import { colors, radius } from '@/constants/theme';
 
 type DocumentUploadProps = {
@@ -23,7 +29,8 @@ type DocumentUploadProps = {
   disabled?: boolean;
   cameraFacing?: 'front' | 'back';
   primaryAction?: 'camera' | 'gallery';
-  onUpload: (uri: string) => Promise<void>;
+  recoveryKey?: KycPickerSide;
+  onUpload: (uri: string, mimeType?: string | null) => Promise<void>;
   onRemove?: () => void;
 };
 
@@ -35,6 +42,7 @@ export function DocumentUpload({
   disabled,
   cameraFacing = 'back',
   primaryAction = 'gallery',
+  recoveryKey,
   onUpload,
   onRemove,
 }: DocumentUploadProps) {
@@ -66,49 +74,67 @@ export function DocumentUpload({
   const pickImage = async (useCamera: boolean) => {
     if (disabled || loading) return;
 
-    const permission = useCamera
-      ? await ImagePicker.requestCameraPermissionsAsync()
-      : await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (!permission.granted) {
-      Alert.alert('Permission needed', 'Please allow access to continue.');
-      return;
-    }
-
-    const result = await runWithLockDeferred(async () =>
-      useCamera
-        ? ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
-            quality: 0.85,
-            allowsEditing: true,
-            cameraType:
-              cameraFacing === 'front'
-                ? ImagePicker.CameraType.front
-                : ImagePicker.CameraType.back,
-          })
-        : ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
-            quality: 0.85,
-            allowsEditing: true,
-          }),
-    );
-
-    if (result.canceled || !result.assets[0]) return;
-
-    const localUri = result.assets[0].uri;
-    setPreviewUri(localUri);
-    setLoading(true);
-
     try {
-      await onUpload(localUri);
+      await runWithLockDeferred(async () => {
+        const permission = useCamera
+          ? await ImagePicker.requestCameraPermissionsAsync()
+          : await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permission.granted) {
+          Alert.alert('Permission needed', 'Please allow access to continue.');
+          return;
+        }
+
+        if (recoveryKey) {
+          await markPendingKycPicker(recoveryKey);
+        }
+
+        const pickerResult = useCamera
+          ? await ImagePicker.launchCameraAsync({
+              mediaTypes: ['images'],
+              quality: 0.85,
+              allowsEditing: true,
+              cameraType:
+                cameraFacing === 'front'
+                  ? ImagePicker.CameraType.front
+                  : ImagePicker.CameraType.back,
+            })
+          : await ImagePicker.launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              quality: 0.85,
+              allowsEditing: true,
+            });
+
+        const resolved = await resolveImagePickerResult(pickerResult);
+        if (!resolved) {
+          await clearPendingKycPicker();
+          return;
+        }
+
+        const asset = resolved.assets[0];
+        setPreviewUri(asset.uri);
+        setLoading(true);
+
+        try {
+          await onUpload(asset.uri, asset.mimeType);
+          await clearPendingKycPicker();
+        } catch (err) {
+          setPreviewUri(value ? assetUrl(value) : null);
+          await clearPendingKycPicker();
+          Alert.alert(
+            'Upload failed',
+            err instanceof Error ? err.message : 'Could not upload image',
+          );
+        } finally {
+          setLoading(false);
+        }
+      });
     } catch (err) {
-      setPreviewUri(value ? assetUrl(value) : null);
+      await clearPendingKycPicker();
       Alert.alert(
-        'Upload failed',
-        err instanceof Error ? err.message : 'Could not upload image',
+        'Could not open picker',
+        err instanceof Error ? err.message : 'Something went wrong while selecting the image.',
       );
-    } finally {
-      setLoading(false);
     }
   };
 

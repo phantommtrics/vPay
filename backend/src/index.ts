@@ -178,9 +178,9 @@ import {
   handleSimulateFund,
 } from './routes/fund.js';
 import {
+  handleKycUpload,
   handleSubmitKyc,
   handleUploadDocument,
-  upload,
 } from './routes/kyc.js';
 import { handleIssuingElementsPage } from './routes/issuing-elements.js';
 import {
@@ -254,7 +254,7 @@ app.patch('/api/auth/device-lock', requireAuth, handleUpdateDeviceLock);
 app.patch('/api/auth/profile', requireAuth, handleUpdateProfile);
 app.delete('/api/auth/account', requireAuth, handleDeleteAccount);
 
-app.post('/api/kyc/upload', requireAuth, upload.single('file'), handleUploadDocument);
+app.post('/api/kyc/upload', requireAuth, handleKycUpload, handleUploadDocument);
 app.post('/api/kyc/submit', requireAuth, attachUserDevice, handleSubmitKyc);
 
 app.get('/api/fund/config', requireAuth, handleGetFundConfig);

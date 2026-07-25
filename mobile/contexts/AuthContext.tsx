@@ -15,7 +15,7 @@ type AuthContextValue = {
   deleteAccount: (confirmation: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (fields: ProfileUpdate) => Promise<void>;
-  uploadKycDocument: (side: 'front' | 'back' | 'selfie', uri: string) => Promise<void>;
+  uploadKycDocument: (side: 'front' | 'back' | 'selfie', uri: string, mimeType?: string | null) => Promise<void>;
   submitKyc: (payload: KycSubmitPayload) => Promise<void>;
 };
 
@@ -114,8 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(updated);
   }, []);
 
-  const uploadKycDocument = useCallback(async (side: 'front' | 'back' | 'selfie', uri: string) => {
-    const updated = await api.uploadKycDocument(side, uri);
+  const uploadKycDocument = useCallback(async (side: 'front' | 'back' | 'selfie', uri: string, mimeType?: string | null) => {
+    const updated = await api.uploadKycDocument(side, uri, mimeType);
     setUser(updated);
   }, []);
 

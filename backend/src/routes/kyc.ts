@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
 import multer from 'multer';
-import type { Response } from 'express';
+import type { NextFunction, Response } from 'express';
 import { z } from 'zod';
 
 import {
@@ -48,6 +48,28 @@ export const upload = multer({
     cb(new Error('Only image files are allowed'));
   },
 });
+
+export function handleKycUpload(
+  req: AuthedRequest,
+  res: Response,
+  next: NextFunction,
+): void {
+  upload.single('file')(req, res, (err: unknown) => {
+    if (!err) {
+      next();
+      return;
+    }
+
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      res.status(413).json({ error: 'Image is too large. Maximum size is 10 MB.' });
+      return;
+    }
+
+    res.status(400).json({
+      error: err instanceof Error ? err.message : 'Upload failed',
+    });
+  });
+}
 
 const submitBodySchema = z.object({
   documentType: z.enum(['national_id', 'passport', 'drivers_license', 'residence_permit']).optional(),

@@ -147,3 +147,58 @@ No nginx reload needed for static-only updates. Users with the PWA installed may
 | Blank page, 200 on `/` | Empty `/var/www/vpay-admin` — run build + rsync |
 | Mixed content errors | Use HTTPS for both admin and `ADMIN_APP_URL` |
 | Push notification links wrong | Set `ADMIN_APP_URL` in backend `.env` |
+| `/login` shows vPay **and** ticketing | See [Both apps loading](#both-apps-loading) below |
+
+### Both apps loading
+
+**Symptom:** `https://api.vpayafrica.phantommetrics.gm/login` shows vPay Admin but ticketing UI or assets also appear.
+
+**Cause:** Two apps share the same hostname. vPay’s SPA fallback (`try_files … /index.html`) was serving vPay `index.html` for **every** path, including `/ticketing/*`. Browsers may also have a **stale ticketing service worker** cached for this origin from before admin was deployed.
+
+**Fix on the server:**
+
+```bash
+# 1. Confirm ticketing is NOT on the api subdomain
+sudo nginx -T 2>/dev/null | grep -E 'server_name|location /ticketing'
+
+# ticketing.config must use its OWN server_name, e.g. phantommetrics.gm
+# api.vpayafrica.conf must ONLY have: server_name api.vpayafrica.phantommetrics.gm;
+```
+
+Update `api.vpayafrica.conf` (both port 80 **and** 443 blocks) so `/ticketing/` is blocked **before** the SPA catch-all:
+
+```nginx
+location ^~ /ticketing/ {
+    return 404;
+}
+```
+
+Reload:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+**In the browser** (once per machine that saw the old setup):
+
+1. Open DevTools → Application → Service Workers
+2. Unregister any worker for `api.vpayafrica.phantommetrics.gm`
+3. Clear site data / hard refresh (`Cmd+Shift+R`)
+
+**Verify separation:**
+
+```bash
+# vPay admin only
+curl -s https://api.vpayafrica.phantommetrics.gm/login | grep '<title>'
+
+# Must NOT return vPay HTML (should be 404 on api subdomain)
+curl -s -o /dev/null -w "%{http_code}\n" https://api.vpayafrica.phantommetrics.gm/ticketing/dashboard
+
+# Ticketing on its own domain (replace with your ticketing host)
+curl -s -o /dev/null -w "%{http_code}\n" https://YOUR-TICKETING-DOMAIN/ticketing/dashboard
+```
+
+Ticketing and vPay must use **different `server_name` values** in nginx. Do not point both apps at `api.vpayafrica.phantommetrics.gm`.
+
+**Ticketing domain:** `https://aps-ticketing.apswallet.gm/ticketing/`  
+If that URL shows **vPay Admin**, `ticketing.config` is pointing at `/var/www/vpay-admin` by mistake. See [ticketing.example.conf](./ticketing.example.conf).
