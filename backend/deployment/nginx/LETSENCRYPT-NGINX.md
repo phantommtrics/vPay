@@ -97,7 +97,7 @@ Renewal runs automatically; no extra setup needed.
 | Step | Command / check |
 |------|------------------|
 | DNS | `api.vpayafrica.phantommetrics.gm` A record → server IP |
-| Backend | Running on port 4000 (e.g. PM2, systemd) |
+| Backend | Running on port 3001 (e.g. PM2, systemd) |
 | Nginx | Config in `sites-enabled`, `nginx -t` OK |
 | Certbot | `certbot --nginx -d api.vpayafrica.phantommetrics.gm` |
 | Renewal | `certbot renew --dry-run` succeeds |
@@ -148,8 +148,8 @@ sudo certbot --nginx -d api.vpayafrica.phantommetrics.gm
 ### Verify request flow (run these on the server and from your PC)
 
 ```bash
-# On the server: backend responding on 4000
-curl -s http://127.0.0.1:4000/health
+# On the server: backend responding on 3001
+curl -s http://127.0.0.1:3001/health
 
 # From anywhere: nginx proxying HTTP (if Certbot not done yet)
 curl -s -o /dev/null -w "%{http_code}" http://api.vpayafrica.phantommetrics.gm/health
@@ -158,11 +158,15 @@ curl -s -o /dev/null -w "%{http_code}" http://api.vpayafrica.phantommetrics.gm/h
 curl -s -o /dev/null -w "%{http_code}" https://api.vpayafrica.phantommetrics.gm/health
 ```
 
-You should get `200` for the last two. If the first works but the others don’t, the problem is nginx or firewall. If the first fails, start the Node backend on port 4000.
+You should get `200` for the last two. If the first works but the others don’t, the problem is nginx or firewall. If the first fails, start the Node backend on port 3001.
+
+### Hosting multiple apps on one server
+
+If requests for another app (e.g. `/ticketing/*`) appear in vPay logs, nginx is routing traffic to port 3001 incorrectly. See [MULTI-APP-NGINX.md](./MULTI-APP-NGINX.md).
 
 ### Other issues
 
-- **"Connection refused" to backend:** Start the Node app on port 4000 and ensure `PORT=4000` in `.env` or process manager.
+- **"Connection refused" to backend:** Start the Node app on port 3001 and ensure `PORT=3001` in `.env` or process manager.
 - **Certbot "Failed to connect":** Ensure port 80 is open (`sudo ufw allow 80` then `sudo ufw reload` if using UFW).
 - **Certificate errors in browser:** Wait a few minutes after running certbot, clear cache, or check that the nginx config reloaded (`sudo systemctl reload nginx`).
-- **502 Bad Gateway:** Nginx can’t reach the backend. Check that the app is running: `curl -s http://127.0.0.1:4000/health`.
+- **502 Bad Gateway:** Nginx can’t reach the backend. Check that the app is running: `curl -s http://127.0.0.1:3001/health`.
