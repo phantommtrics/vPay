@@ -343,7 +343,7 @@ export function issuingElementsUrl(params?: {
     search.set('expiry', params.expiry);
   }
   const query = search.toString();
-  return `${API_URL}/issuing-elements${query ? `?${query}` : ''}`;
+  return `${API_URL}/api/issuing-elements${query ? `?${query}` : ''}`;
 }
 
 export function assetUrl(path: string | null): string | null {

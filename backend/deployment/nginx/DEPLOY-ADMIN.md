@@ -9,6 +9,7 @@ Serve the admin portal and API from **one nginx site**:
 | `https://api.vpayafrica.phantommetrics.gm/api/*` | Node backend (port 3001) |
 | `https://api.vpayafrica.phantommetrics.gm/uploads/*` | Node backend |
 | `https://api.vpayafrica.phantommetrics.gm/health` | Node backend |
+| `https://api.vpayafrica.phantommetrics.gm/issuing-elements` | Node backend (mobile card reveal WebView; legacy path) |
 
 The admin app calls `/api/...` with **relative URLs** (no separate API host).
 
@@ -74,6 +75,7 @@ sudo ln -sf /etc/nginx/sites-available/api.vpayafrica.conf /etc/nginx/sites-enab
 
 - `/api/` → `proxy_pass http://127.0.0.1:3001`
 - `/uploads/` → `proxy_pass http://127.0.0.1:3001`
+- `/issuing-elements` → `proxy_pass http://127.0.0.1:3001` (mobile card reveal WebView)
 - `/` → `try_files $uri $uri/ /index.html` with `root /var/www/vpay-admin`
 
 Remove any old catch-all like `location / { proxy_pass http://127.0.0.1:3001; }`.

@@ -280,6 +280,7 @@ app.get('/api/cards/:id', requireAuth, handleGetCard);
 app.post('/api/cards/:id/ephemeral-key', requireAuth, handleCreateEphemeralKey);
 app.patch('/api/cards/:id', requireAuth, handleUpdateCardStatus);
 
+app.get('/api/issuing-elements', handleIssuingElementsPage);
 app.get('/issuing-elements', handleIssuingElementsPage);
 
 app.post('/api/admin/auth/send-otp', handleAdminSendOtp);
