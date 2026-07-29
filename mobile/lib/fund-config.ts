@@ -16,6 +16,7 @@ export type FundConfig = {
   walletTopupFee: WalletTopupFeePricing;
   cardFundFee: WalletTopupFeePricing;
   simulationEnabled: boolean;
+  directPayReady: boolean;
 };
 
 export function formatFundFeeLabel(percent: number): string {

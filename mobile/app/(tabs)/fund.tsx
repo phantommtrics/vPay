@@ -66,7 +66,7 @@ function amountsMatch(stored: number, entered: number): boolean {
 
 export default function FundScreen() {
   const insets = useSafeAreaInsets();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const { wallet, loading: walletLoading, refreshing: walletRefreshing, refresh: refreshWallet } =
     useWallet(Boolean(user?.kycComplete));
   const [flowStep, setFlowStep] = useState<FundFlowStep>('main');
@@ -110,6 +110,7 @@ export default function FundScreen() {
     fundConfig?.walletTopupFee ??
     (fundConfig?.feePercent != null ? { type: 'fixed', feePercent: fundConfig.feePercent } : undefined);
   const simulationEnabled = fundConfig?.simulationEnabled ?? pendingPrepare?.simulationEnabled ?? false;
+  const directPayReady = fundConfig?.directPayReady ?? simulationEnabled;
   const feeLabel =
     pendingPrepare != null && pendingPrepare.funding.amountGmd > 0
       ? formatWalletTopupFeeLabel(
@@ -136,16 +137,13 @@ export default function FundScreen() {
 
   const onRefresh = useCallback(async () => {
     const tasks: Promise<void>[] = [refreshWallet()];
-    if (user?.kycComplete && user.directPayProvisioningStatus !== 'active') {
-      tasks.push(refreshUser());
-    }
     tasks.push(
       getFundConfig()
         .then((config) => setFundConfig(config))
         .catch(() => {}),
     );
     await Promise.all(tasks);
-  }, [refreshUser, refreshWallet, user?.directPayProvisioningStatus, user?.kycComplete]);
+  }, [refreshWallet]);
 
   const clearError = () => setError('');
 
@@ -171,17 +169,6 @@ export default function FundScreen() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    if (!user?.kycComplete || user.directPayProvisioningStatus === 'active') return;
-    if (simulationEnabled) return;
-    void refreshUser();
-  }, [
-    refreshUser,
-    simulationEnabled,
-    user?.directPayProvisioningStatus,
-    user?.kycComplete,
-  ]);
 
   const pollUntilPaid = useCallback(
     async (fundingId: string, gmd: number, usd: number) => {
@@ -341,14 +328,14 @@ export default function FundScreen() {
     if (numAmount <= 0 || isLoading || fundInFlightRef.current) return;
 
     const canSimulate = simulationEnabled && user?.kycComplete && Boolean(user.phone?.trim());
-    const canDirectPay = Boolean(user?.directPayBusinessId);
+    const canDirectPay = !simulationEnabled && directPayReady && user?.kycComplete && Boolean(user.phone?.trim());
 
     if (!canSimulate && !canDirectPay) {
       setError(
         user?.kycComplete
-          ? simulationEnabled
+          ? simulationEnabled || directPayReady
             ? 'Add your phone number in profile to create your vPay wallet.'
-            : 'Your directPay merchant is still being set up. Try again shortly.'
+            : 'Wallet top-ups are temporarily unavailable. Please try again later.'
           : 'Complete identity verification before adding funds.',
       );
       return;
@@ -465,12 +452,10 @@ export default function FundScreen() {
           </Text>
         </View>
 
-      {user?.kycComplete && !user.directPayBusinessId && !simulationEnabled ? (
+      {user?.kycComplete && !simulationEnabled && fundConfig && !directPayReady ? (
         <View style={styles.noticeBanner}>
           <Text style={styles.noticeText}>
-            {user.directPayProvisioningStatus === 'failed' && user.directPayProvisioningError
-              ? user.directPayProvisioningError
-              : 'Setting up your directPay merchant… funding will be available once complete.'}
+            Wallet top-ups are temporarily unavailable. Please try again later.
           </Text>
         </View>
       ) : null}
