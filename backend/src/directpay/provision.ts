@@ -135,3 +135,24 @@ export async function provisionUserDirectPayMerchant(userId: string): Promise<vo
 export function scheduleDirectPayProvisioning(userId: string): void {
   void provisionUserDirectPayMerchant(userId);
 }
+
+/** Link an existing directPay merchant or provision one when KYC is complete. */
+export async function ensureUserDirectPayMerchantReady(userId: string): Promise<User | null> {
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return null;
+
+  if (!user.kycComplete) return user;
+
+  const { configured } = getDirectPayPartnerConfig();
+  if (!configured) return user;
+
+  if (
+    user.directPayBusinessId &&
+    user.directPayProvisioningStatus === DirectPayProvisioningStatus.ACTIVE
+  ) {
+    return user;
+  }
+
+  await provisionUserDirectPayMerchant(userId);
+  return prisma.user.findUnique({ where: { id: userId } });
+}

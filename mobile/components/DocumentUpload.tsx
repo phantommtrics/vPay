@@ -86,7 +86,11 @@ export function DocumentUpload({
         }
 
         if (recoveryKey) {
-          await markPendingKycPicker(recoveryKey);
+          try {
+            await markPendingKycPicker(recoveryKey);
+          } catch {
+            // Best-effort only; do not block the picker if storage fails.
+          }
         }
 
         const pickerResult = useCamera

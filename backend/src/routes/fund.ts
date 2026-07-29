@@ -10,6 +10,7 @@ import {
   listDirectPayWallets,
   startDirectPayWalletCheckout,
 } from '../directpay/partner.js';
+import { ensureUserDirectPayMerchantReady } from '../directpay/provision.js';
 import { prisma } from '../db.js';
 import { postWalletTopupJournal } from '../journal/service.js';
 import {
@@ -118,7 +119,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
     }
 
     const userId = req.userId!;
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    let user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -182,9 +183,15 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
       return;
     }
 
+    const synced = await ensureUserDirectPayMerchantReady(userId);
+    if (synced) user = synced;
+
     if (!user.directPayBusinessId) {
+      const hint = user.directPayProvisioningError?.trim();
       res.status(409).json({
-        error: 'Your directPay merchant is not ready yet. Please wait for provisioning to complete.',
+        error:
+          hint ||
+          'Your directPay merchant is not ready yet. Please wait for provisioning to complete.',
       });
       return;
     }

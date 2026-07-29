@@ -66,7 +66,7 @@ function amountsMatch(stored: number, entered: number): boolean {
 
 export default function FundScreen() {
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { wallet, loading: walletLoading, refreshing: walletRefreshing, refresh: refreshWallet } =
     useWallet(Boolean(user?.kycComplete));
   const [flowStep, setFlowStep] = useState<FundFlowStep>('main');
@@ -136,13 +136,16 @@ export default function FundScreen() {
 
   const onRefresh = useCallback(async () => {
     const tasks: Promise<void>[] = [refreshWallet()];
+    if (user?.kycComplete && user.directPayProvisioningStatus !== 'active') {
+      tasks.push(refreshUser());
+    }
     tasks.push(
       getFundConfig()
         .then((config) => setFundConfig(config))
         .catch(() => {}),
     );
     await Promise.all(tasks);
-  }, [refreshWallet]);
+  }, [refreshUser, refreshWallet, user?.directPayProvisioningStatus, user?.kycComplete]);
 
   const clearError = () => setError('');
 
@@ -168,6 +171,17 @@ export default function FundScreen() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!user?.kycComplete || user.directPayProvisioningStatus === 'active') return;
+    if (simulationEnabled) return;
+    void refreshUser();
+  }, [
+    refreshUser,
+    simulationEnabled,
+    user?.directPayProvisioningStatus,
+    user?.kycComplete,
+  ]);
 
   const pollUntilPaid = useCallback(
     async (fundingId: string, gmd: number, usd: number) => {
@@ -327,8 +341,7 @@ export default function FundScreen() {
     if (numAmount <= 0 || isLoading || fundInFlightRef.current) return;
 
     const canSimulate = simulationEnabled && user?.kycComplete && Boolean(user.phone?.trim());
-    const canDirectPay =
-      user?.directPayProvisioningStatus === 'active' && Boolean(user.directPayBusinessId);
+    const canDirectPay = Boolean(user?.directPayBusinessId);
 
     if (!canSimulate && !canDirectPay) {
       setError(
@@ -452,10 +465,12 @@ export default function FundScreen() {
           </Text>
         </View>
 
-      {user?.kycComplete && user.directPayProvisioningStatus !== 'active' && !simulationEnabled ? (
+      {user?.kycComplete && !user.directPayBusinessId && !simulationEnabled ? (
         <View style={styles.noticeBanner}>
           <Text style={styles.noticeText}>
-            Setting up your directPay merchant… funding will be available once complete.
+            {user.directPayProvisioningStatus === 'failed' && user.directPayProvisioningError
+              ? user.directPayProvisioningError
+              : 'Setting up your directPay merchant… funding will be available once complete.'}
           </Text>
         </View>
       ) : null}

@@ -4,6 +4,8 @@ import type { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 
 import { prisma } from '../db.js';
+import { ensureUserDirectPayMerchantReady } from '../directpay/provision.js';
+import { isFundSimulationEnabled } from '../fund-config.js';
 import { signToken, verifyToken } from '../auth.js';
 import {
   ACCOUNT_DELETE_CONFIRMATION,
@@ -327,10 +329,19 @@ export async function handleUpdateDeviceLock(req: AuthedRequest, res: Response):
 }
 
 export async function handleMe(req: AuthedRequest, res: Response): Promise<void> {
-  const user = await findUserById(req.userId!);
+  let user = await findUserById(req.userId!);
   if (!user) {
     res.status(404).json({ error: 'User not found' });
     return;
+  }
+
+  if (
+    !isFundSimulationEnabled() &&
+    user.kycComplete &&
+    (user.directPayProvisioningStatus !== 'ACTIVE' || !user.directPayBusinessId)
+  ) {
+    const synced = await ensureUserDirectPayMerchantReady(user.id);
+    if (synced) user = synced;
   }
 
   const headerDeviceId = req.headers['x-device-id'];
