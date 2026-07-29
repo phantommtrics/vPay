@@ -10,7 +10,7 @@ import {
   listDirectPayWallets,
   startDirectPayWalletCheckout,
 } from '../directpay/partner.js';
-import { ensureUserDirectPayMerchantReady } from '../directpay/provision.js';
+import { getPlatformDirectPayMerchant } from '../directpay/platform.js';
 import { prisma } from '../db.js';
 import { postWalletTopupJournal } from '../journal/service.js';
 import {
@@ -119,7 +119,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
     }
 
     const userId = req.userId!;
-    let user = await prisma.user.findUnique({ where: { id: userId } });
+    const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       res.status(404).json({ error: 'User not found' });
       return;
@@ -183,15 +183,10 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
       return;
     }
 
-    const synced = await ensureUserDirectPayMerchantReady(userId);
-    if (synced) user = synced;
-
-    if (!user.directPayBusinessId) {
-      const hint = user.directPayProvisioningError?.trim();
-      res.status(409).json({
-        error:
-          hint ||
-          'Your directPay merchant is not ready yet. Please wait for provisioning to complete.',
+    const platformMerchant = await getPlatformDirectPayMerchant();
+    if (!platformMerchant) {
+      res.status(503).json({
+        error: 'Wallet top-ups are not available yet. Please try again later.',
       });
       return;
     }
@@ -230,14 +225,14 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
       },
     });
 
-    const order = await createDirectPayOrder(user.directPayBusinessId!, {
+    const order = await createDirectPayOrder(platformMerchant.businessId, {
       partnerExternalBookingId: fundingOrder.id,
       amountGmd: totalGmd,
       currency: 'GMD',
       category: 'vPay card funding',
     });
 
-    const wallets = await listDirectPayWallets(user.directPayBusinessId, order.id);
+    const wallets = await listDirectPayWallets(platformMerchant.businessId, order.id);
 
     const updated = await prisma.fundingOrder.update({
       where: { id: fundingOrder.id },
@@ -245,7 +240,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
         directPayOrderId: order.id,
         directPayOrderPublicCode: order.publicCode,
         metadata: mergeFundingMetadata(fundingOrder, {
-          businessId: user.directPayBusinessId,
+          businessId: platformMerchant.businessId,
           orderId: order.id,
           orderPublicCode: order.publicCode,
         }),
@@ -258,7 +253,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
       exchangeRate,
       feePercent,
       simulationEnabled: false,
-      businessId: user.directPayBusinessId,
+      businessId: platformMerchant.businessId,
       order: {
         id: order.id,
         publicCode: order.publicCode,
@@ -270,7 +265,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
       ...(wallets.length === 0
         ? {
             prepareHint:
-              'No payment wallets are available yet. Ask the platform operator to configure Wave or APS for your merchant.',
+              'No payment wallets are available yet. Ask the platform operator to configure Wave or APS.',
           }
         : {}),
     });
@@ -284,7 +279,7 @@ export async function handlePrepareFund(req: DeviceAuthedRequest, res: Response)
 async function loadFundingOrder(
   req: AuthedRequest,
   res: Response,
-): Promise<{ order: FundingOrder; user: NonNullable<Awaited<ReturnType<typeof prisma.user.findUnique>>> } | null> {
+): Promise<{ order: FundingOrder; businessId: string } | null> {
   if (!getDirectPayPartnerConfig().configured) {
     res.status(503).json({ error: 'directPay payments are not configured on this server.' });
     return null;
@@ -303,13 +298,15 @@ async function loadFundingOrder(
     return null;
   }
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user?.directPayBusinessId) {
-    res.status(409).json({ error: 'directPay merchant is not linked.' });
+  const meta = getFundingOrderMetadata(order);
+  const businessId =
+    meta.directPay?.businessId ?? (await getPlatformDirectPayMerchant())?.businessId;
+  if (!businessId) {
+    res.status(503).json({ error: 'Wallet top-ups are not available yet. Please try again later.' });
     return null;
   }
 
-  return { order, user };
+  return { order, businessId };
 }
 
 export async function handleFundWallet(req: AuthedRequest, res: Response): Promise<void> {
@@ -323,7 +320,7 @@ export async function handleFundWallet(req: AuthedRequest, res: Response): Promi
       return;
     }
 
-    const { order, user } = loaded;
+    const { order, businessId } = loaded;
     const meta = getFundingOrderMetadata(order);
     let orderId = order.directPayOrderId ?? meta.directPay?.orderId;
     if (!orderId) {
@@ -331,11 +328,7 @@ export async function handleFundWallet(req: AuthedRequest, res: Response): Promi
       return;
     }
 
-    const checkout = await startDirectPayWalletCheckout(
-      user.directPayBusinessId!,
-      orderId,
-      parsed.data,
-    );
+    const checkout = await startDirectPayWalletCheckout(businessId, orderId, parsed.data);
 
     await prisma.fundingOrder.update({
       where: { id: order.id },
@@ -349,7 +342,7 @@ export async function handleFundWallet(req: AuthedRequest, res: Response): Promi
     res.json({
       ok: true,
       fundingId: order.id,
-      businessId: user.directPayBusinessId,
+      businessId,
       orderId,
       ...checkout,
     });
@@ -371,7 +364,7 @@ export async function handleFundApsAuthorize(req: AuthedRequest, res: Response):
       return;
     }
 
-    const { order, user } = loaded;
+    const { order, businessId } = loaded;
     const meta = getFundingOrderMetadata(order);
     const orderId = order.directPayOrderId ?? meta.directPay?.orderId;
     if (!orderId) {
@@ -379,7 +372,7 @@ export async function handleFundApsAuthorize(req: AuthedRequest, res: Response):
       return;
     }
 
-    const out = await authorizeDirectPayApsWallet(user.directPayBusinessId!, orderId, parsed.data);
+    const out = await authorizeDirectPayApsWallet(businessId, orderId, parsed.data);
     if (!out.authState) {
       res.status(502).json({ error: 'directPay APS authorize did not return authState.' });
       return;
@@ -417,7 +410,7 @@ export async function handleFundApsComplete(req: AuthedRequest, res: Response): 
       return;
     }
 
-    const { order, user } = loaded;
+    const { order, businessId } = loaded;
     const meta = getFundingOrderMetadata(order);
     const orderId = order.directPayOrderId ?? meta.directPay?.orderId;
     if (!orderId) {
@@ -431,7 +424,7 @@ export async function handleFundApsComplete(req: AuthedRequest, res: Response): 
       return;
     }
 
-    const data = await completeDirectPayApsWallet(user.directPayBusinessId!, orderId, {
+    const data = await completeDirectPayApsWallet(businessId, orderId, {
       gatewayCode: parsed.data.gatewayCode,
       authState,
       otp: parsed.data.otp,

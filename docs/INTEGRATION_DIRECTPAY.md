@@ -29,14 +29,18 @@ See also [directPay INTEGRATION_VPAY.md](../../directPay/docs/INTEGRATION_VPAY.m
 | `INTERNAL_PARTNER_WEBHOOK_URL` | Include `http://localhost:3001/api/webhooks/directpay` (comma-separated if multiple) |
 | `INTERNAL_PARTNER_WEBHOOK_SECRET` | Same value as vPay |
 
-Platform operator must configure Wave/APS gateway credentials for each provisioned `businessId` in directPay Merchant API.
+Platform operator must configure Wave/APS gateway credentials for the platform `businessId` in directPay Merchant API.
+
+## Platform merchant (one per vPay)
+
+vPay uses **one** directPay merchant for all customer wallet top-ups. An admin provisions it once for a designated user (`Connect directPay merchant` in the admin portal, or `npm run admin:provision-directpay -- ops@example.com`). That user's `directPayBusinessId` is the platform merchant; other customers fund through it and receive credits on their own vPay wallets.
 
 ## Flow
 
 1. User completes KYC → admin approves (`npm run admin:approve -- user@example.com` or `POST /api/admin/kyc/:userId/approve`). **Approve only updates KYC status** — it does not provision Stripe or directPay.
 2. Optionally provision Stripe card: `npm run admin:provision -- user@example.com`
-3. Optionally provision directPay merchant: `npm run admin:provision-directpay -- user@example.com` or `POST /api/admin/kyc/:userId/provision-directpay`
-4. User opens **Fund** → `POST /api/fund/prepare` creates a funding order + directPay checkout order.
+3. Provision the **platform** directPay merchant once: `npm run admin:provision-directpay -- ops@example.com` or `POST /api/admin/kyc/:userId/provision-directpay`
+4. Any KYC-approved user opens **Fund** → `POST /api/fund/prepare` creates a funding order + directPay checkout order on the platform merchant.
 4. User pays via Wave (launch URL) or APS (authorize + OTP).
 5. directPay sends `payment.completed` webhook → funding order marked `PAID`.
 

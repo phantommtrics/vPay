@@ -1,3 +1,4 @@
+import { isPlatformDirectPayReady } from './directpay/platform.js';
 import {
   getPlatformConfigCache,
   setPlatformConfigCache,
@@ -49,13 +50,17 @@ export type FundConfigResponse = {
   walletTopupFee: WalletTopupFeePricing;
   cardFundFee: WalletTopupFeePricing;
   simulationEnabled: boolean;
+  /** True when real wallet top-ups can be started (simulation or platform directPay merchant linked). */
+  directPayReady: boolean;
 };
 
 export async function getFundConfigAsync(): Promise<FundConfigResponse> {
-  const [{ exchangeRate }, walletTopupFee, cardFundFee] = await Promise.all([
+  const simulationEnabled = isFundSimulationEnabled();
+  const [{ exchangeRate }, walletTopupFee, cardFundFee, directPayReady] = await Promise.all([
     getFundConfigFromCatalog(),
     getWalletTopupFeePricing(),
     getCardFundFeePricing(),
+    simulationEnabled ? Promise.resolve(true) : isPlatformDirectPayReady(),
   ]);
 
   return {
@@ -63,7 +68,8 @@ export async function getFundConfigAsync(): Promise<FundConfigResponse> {
     ...(walletTopupFee.type === 'fixed' ? { feePercent: walletTopupFee.feePercent } : {}),
     walletTopupFee,
     cardFundFee,
-    simulationEnabled: isFundSimulationEnabled(),
+    simulationEnabled,
+    directPayReady,
   };
 }
 
