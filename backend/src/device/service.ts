@@ -4,20 +4,30 @@ import { z } from 'zod';
 
 import { prisma } from '../db.js';
 import { log } from '../logger.js';
+import { truncateOptionalString, truncateRequiredString } from './sanitize.js';
+
+const optionalDeviceString = (max: number) =>
+  z.preprocess(
+    (value) => truncateOptionalString(value, max),
+    z.string().max(max).optional().nullable(),
+  );
 
 export const deviceInfoSchema = z.object({
-  fingerprint: z.string().min(1).max(128),
-  deviceName: z.string().max(200).optional().nullable(),
-  brand: z.string().max(100).optional().nullable(),
-  manufacturer: z.string().max(100).optional().nullable(),
-  modelName: z.string().max(100).optional().nullable(),
-  deviceType: z.string().max(50).optional().nullable(),
-  osName: z.string().max(50).optional().nullable(),
-  osVersion: z.string().max(50).optional().nullable(),
-  imei: z.string().max(50).optional().nullable(),
-  hardwareId: z.string().max(128).optional().nullable(),
+  fingerprint: z.preprocess(
+    (value) => truncateRequiredString(value, 128),
+    z.string().min(1).max(128),
+  ),
+  deviceName: optionalDeviceString(200),
+  brand: optionalDeviceString(100),
+  manufacturer: optionalDeviceString(100),
+  modelName: optionalDeviceString(100),
+  deviceType: optionalDeviceString(100),
+  osName: optionalDeviceString(100),
+  osVersion: optionalDeviceString(100),
+  imei: optionalDeviceString(100),
+  hardwareId: optionalDeviceString(128),
   isEmulator: z.boolean().optional(),
-  appVersion: z.string().max(50).optional().nullable(),
+  appVersion: optionalDeviceString(100),
 });
 
 export type DeviceInfoInput = z.infer<typeof deviceInfoSchema>;

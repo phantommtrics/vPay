@@ -21,7 +21,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
-import { VirtualCard } from '@/components/VirtualCard';
+import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCards } from '@/hooks/useCards';
 import { useWallet } from '@/hooks/useWallet';
@@ -220,7 +220,7 @@ export default function CardsScreen() {
         </View>
       ) : primaryCard ? (
         <View>
-          <VirtualCard
+          <ExpandableVirtualCard
             card={primaryCard}
             stripePublishableKey={stripePublishableKey}
             stripeConnectedAccountId={stripeConnectedAccountId}

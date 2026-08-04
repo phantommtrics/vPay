@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { TransactionRow } from '@/components/TransactionRow';
-import { VirtualCard } from '@/components/VirtualCard';
+import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCardActivity } from '@/hooks/useCardActivity';
 import { useCards } from '@/hooks/useCards';
@@ -182,7 +182,7 @@ export default function HomeScreen() {
         </View>
       ) : primaryCard ? (
         <View style={styles.cardSection}>
-          <VirtualCard
+          <ExpandableVirtualCard
             card={primaryCard}
             stripePublishableKey={stripePublishableKey}
             stripeConnectedAccountId={stripeConnectedAccountId}

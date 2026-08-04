@@ -88,8 +88,8 @@ export function VirtualCard({
                 adjustsFontSizeToFit
                 minimumFontScale={0.75}>
                 {revealed
-                  ? formatCardBalance(card.balance, card.currency)
-                  : formatMaskedCardBalance(card.currency)}
+                  ? formatCardBalance(card.balanceUsd, 'usd')
+                  : formatMaskedCardBalance('usd')}
               </Text>
             </View>
             <CardBrandMark brand={card.brand} size={32} />

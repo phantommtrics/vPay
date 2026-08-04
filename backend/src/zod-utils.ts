@@ -9,18 +9,41 @@ const FIELD_LABELS: Record<string, string> = {
   address: 'Address',
   city: 'City',
   country: 'Country',
+  email: 'Email',
+  fingerprint: 'Device fingerprint',
+  deviceName: 'Device name',
+  brand: 'Device brand',
+  manufacturer: 'Device manufacturer',
+  modelName: 'Device model',
+  deviceType: 'Device type',
+  osName: 'Operating system',
+  osVersion: 'OS version',
+  appVersion: 'App version',
+  hardwareId: 'Device ID',
 };
+
+function formatFieldLabel(path: (string | number)[]): string {
+  if (path.length === 0) {
+    return 'Field';
+  }
+
+  if (path[0] === 'device' && typeof path[1] === 'string') {
+    return FIELD_LABELS[path[1]] ?? `Device ${path[1]}`;
+  }
+
+  const field = path[0];
+  return typeof field === 'string' ? (FIELD_LABELS[field] ?? field) : 'Field';
+}
 
 export function formatZodError(error: ZodError): string {
   const issue = error.issues[0];
   if (!issue) return 'Invalid request';
 
-  const field = issue.path[0];
-  const label = typeof field === 'string' ? (FIELD_LABELS[field] ?? field) : 'Field';
+  const label = formatFieldLabel(issue.path);
 
   if (issue.message === 'Required' || issue.code === 'invalid_type') {
     return `${label} is required`;
   }
 
-  return issue.message;
+  return issue.message.replace(/^String /, `${label} `);
 }
