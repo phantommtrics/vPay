@@ -249,7 +249,7 @@ export default function CardsScreen() {
             <View style={styles.balanceChip}>
               <Text style={styles.balanceChipLabel}>Card balance</Text>
               <Text style={styles.balanceChipValue}>
-                {formatCardBalance(primaryCard.balanceUsd, primaryCard.currency)}
+                {formatCardBalance(primaryCard.balanceUsd, 'usd')}
               </Text>
             </View>
             <View style={styles.balanceChip}>
