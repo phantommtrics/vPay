@@ -15,6 +15,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { AppLockProvider } from '@/contexts/AppLockContext';
 import { AppLockGate } from '@/components/AppLockGate';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ForceUpdateGate } from '@/components/ForceUpdateGate';
 import { StartupGate } from '@/components/StartupGate';
 
 SplashScreen.preventAutoHideAsync();
@@ -47,38 +48,40 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <StartupGate>
-        <AuthProvider>
-          <AppLockProvider>
-            <AppLockGate>
-              <StatusBar style="dark" />
-              <Stack screenOptions={{ headerShown: false }}>
-                <Stack.Screen name="index" />
-                <Stack.Screen name="(auth)" />
-                <Stack.Screen name="(tabs)" />
-                <Stack.Screen
-                  name="personal-details"
-                  options={{ presentation: 'card', animation: 'slide_from_right' }}
-                />
-                <Stack.Screen
-                  name="security"
-                  options={{ presentation: 'card', animation: 'slide_from_right' }}
-                />
-                <Stack.Screen
-                  name="delete-account"
-                  options={{ presentation: 'card', animation: 'slide_from_right' }}
-                />
-                <Stack.Screen
-                  name="terms"
-                  options={{ presentation: 'card', animation: 'slide_from_right' }}
-                />
-                <Stack.Screen
-                  name="privacy"
-                  options={{ presentation: 'card', animation: 'slide_from_right' }}
-                />
-              </Stack>
-            </AppLockGate>
-          </AppLockProvider>
-        </AuthProvider>
+        <ForceUpdateGate>
+          <AuthProvider>
+            <AppLockProvider>
+              <AppLockGate>
+                <StatusBar style="dark" />
+                <Stack screenOptions={{ headerShown: false }}>
+                  <Stack.Screen name="index" />
+                  <Stack.Screen name="(auth)" />
+                  <Stack.Screen name="(tabs)" />
+                  <Stack.Screen
+                    name="personal-details"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="security"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="delete-account"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="terms"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="privacy"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                </Stack>
+              </AppLockGate>
+            </AppLockProvider>
+          </AuthProvider>
+        </ForceUpdateGate>
       </StartupGate>
     </ErrorBoundary>
   );

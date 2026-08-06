@@ -4,7 +4,16 @@ import { Platform } from 'react-native';
 const DEV_HOSTS = new Set(['localhost', '127.0.0.1', '10.0.2.2']);
 
 function normalizeUrl(url: string): string {
-  return url.replace(/\/$/, '');
+  return url.trim().replace(/\/$/, '');
+}
+
+function isValidHttpUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 function isDevHost(url: string): boolean {
@@ -17,7 +26,7 @@ function isDevHost(url: string): boolean {
 }
 
 function resolveApiUrl(): string {
-  const envUrl = process.env.EXPO_PUBLIC_API_URL;
+  const envUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (envUrl) {
     return normalizeUrl(envUrl);
   }
@@ -45,15 +54,17 @@ function resolveApiUrl(): string {
 export const API_URL = resolveApiUrl();
 
 export function getConfigError(): string | null {
-  if (__DEV__) {
-    return null;
-  }
-
   if (!API_URL) {
-    return 'This build is missing EXPO_PUBLIC_API_URL. Rebuild the app with your production API URL configured in EAS secrets or mobile/.env.';
+    return __DEV__
+      ? 'EXPO_PUBLIC_API_URL is missing. Add it to mobile/.env, then restart Expo with: npx expo start -c'
+      : 'This build is missing EXPO_PUBLIC_API_URL. Rebuild the app with your production API URL configured in EAS secrets or mobile/.env.';
   }
 
-  if (isDevHost(API_URL)) {
+  if (!isValidHttpUrl(API_URL)) {
+    return `EXPO_PUBLIC_API_URL is invalid: ${API_URL}`;
+  }
+
+  if (!__DEV__ && isDevHost(API_URL)) {
     return 'This build is pointing at a development server. Rebuild with your production API URL before publishing to the Play Store.';
   }
 

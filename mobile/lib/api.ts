@@ -1,7 +1,9 @@
 import { API_URL } from './config';
+import { toNetworkErrorMessage } from './network-error';
 import { getToken } from './auth-storage';
 import { getRegisteredDeviceId } from './device-storage';
 import type { DeviceInfoPayload } from './device-info';
+import type { AppUpdateConfig } from './app-update';
 import type {
   CardFundTransactionSummary,
   CardsResponse,
@@ -49,17 +51,18 @@ async function request<T>(
     }
   }
 
+  if (!API_URL) {
+    throw new ApiError(toNetworkErrorMessage(null), 0);
+  }
+
   let response: Response;
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...options,
       headers,
     });
-  } catch {
-    throw new ApiError(
-      'Unable to reach the server. Check that you have an active internet connection',
-      0,
-    );
+  } catch (error) {
+    throw new ApiError(toNetworkErrorMessage(error), 0);
   }
 
   const data = await response.json().catch(() => ({}));
@@ -72,6 +75,10 @@ async function request<T>(
 }
 
 export { ApiError };
+
+export async function fetchAppConfig(): Promise<AppUpdateConfig> {
+  return request('/api/app/config', { auth: false });
+}
 
 export async function sendOtp(
   email: string,
@@ -160,11 +167,8 @@ export async function uploadKycDocument(
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,
     });
-  } catch {
-    throw new ApiError(
-      'Unable to reach the server. Check that you have an active internet connection',
-      0,
-    );
+  } catch (error) {
+    throw new ApiError(toNetworkErrorMessage(error), 0);
   }
 
   const data = await response.json().catch(() => ({}));

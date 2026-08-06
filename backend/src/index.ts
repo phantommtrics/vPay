@@ -168,6 +168,7 @@ import {
   handleGetCardIssuanceConfig,
   handlePayCardIssuance,
 } from './routes/card-issuance.js';
+import { handleGetAppConfig } from './routes/app-config.js';
 import {
   handleFundApsAuthorize,
   handleFundApsComplete,
@@ -245,6 +246,8 @@ app.get('/health', async (_req, res) => {
     res.status(503).json({ ok: false, db: 'disconnected' });
   }
 });
+
+app.get('/api/app/config', handleGetAppConfig);
 
 app.post('/api/auth/send-otp', handleSendOtp);
 app.post('/api/auth/verify-otp', handleVerifyOtp);
