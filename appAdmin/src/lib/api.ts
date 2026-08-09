@@ -300,6 +300,8 @@ export function fetchAdminUsers(
   params: {
     kycStatus?: KycStatus;
     search?: string;
+    startDate?: string;
+    endDate?: string;
     page?: number;
     limit?: number;
   } = {},
@@ -307,6 +309,8 @@ export function fetchAdminUsers(
   const qs = new URLSearchParams();
   if (params.kycStatus) qs.set('kycStatus', params.kycStatus);
   if (params.search) qs.set('search', params.search);
+  if (params.startDate) qs.set('startDate', params.startDate);
+  if (params.endDate) qs.set('endDate', params.endDate);
   if (params.page) qs.set('page', String(params.page));
   if (params.limit) qs.set('limit', String(params.limit));
   const query = qs.toString();

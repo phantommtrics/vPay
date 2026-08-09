@@ -18,14 +18,31 @@ import { listUserDevicesForAdmin, clearUserDeviceLock } from '../device/service.
 import { log } from '../logger.js';
 import type { AdminAuthedRequest } from '../middleware/admin-auth.js';
 
-const listQuerySchema = z.object({
-  kycStatus: z.enum(['incomplete', 'pending', 'approved', 'rejected']).optional(),
-  search: z.string().optional(),
-  stripeStatus: z.enum(['none', 'pending', 'active', 'failed']).optional(),
-  directPayStatus: z.enum(['none', 'pending', 'active', 'failed']).optional(),
-  page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
-});
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const listQuerySchema = z
+  .object({
+    kycStatus: z.enum(['incomplete', 'pending', 'approved', 'rejected']).optional(),
+    search: z.string().optional(),
+    stripeStatus: z.enum(['none', 'pending', 'active', 'failed']).optional(),
+    directPayStatus: z.enum(['none', 'pending', 'active', 'failed']).optional(),
+    startDate: isoDateSchema.optional(),
+    endDate: isoDateSchema.optional(),
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.startDate && !value.endDate) return;
+    const start = value.startDate ?? value.endDate!;
+    const end = value.endDate ?? value.startDate!;
+    if (start > end) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'startDate must be on or before endDate',
+        path: ['endDate'],
+      });
+    }
+  });
 
 function parseKycStatus(value: string): KycStatus {
   return value.toUpperCase() as KycStatus;
@@ -60,6 +77,8 @@ export async function handleListAdminUsers(req: AdminAuthedRequest, res: Respons
     directPayStatus: parsed.data.directPayStatus
       ? parseDirectPayStatus(parsed.data.directPayStatus)
       : undefined,
+    startDate: parsed.data.startDate,
+    endDate: parsed.data.endDate,
     page: parsed.data.page,
     limit: parsed.data.limit,
   });

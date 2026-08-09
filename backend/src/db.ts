@@ -591,6 +591,8 @@ export async function listAdminUsers(params: {
   search?: string;
   stripeStatus?: StripeProvisioningStatus;
   directPayStatus?: DirectPayProvisioningStatus;
+  startDate?: string;
+  endDate?: string;
   page?: number;
   limit?: number;
 }): Promise<{ users: User[]; total: number }> {
@@ -616,6 +618,14 @@ export async function listAdminUsers(params: {
       { firstName: { contains: q, mode: 'insensitive' } },
       { lastName: { contains: q, mode: 'insensitive' } },
     ];
+  }
+  if (params.startDate || params.endDate) {
+    const startStr = params.startDate ?? params.endDate!;
+    const endStr = params.endDate ?? params.startDate!;
+    const start = new Date(`${startStr}T00:00:00.000Z`);
+    const endExclusive = new Date(`${endStr}T00:00:00.000Z`);
+    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
+    where.createdAt = { gte: start, lt: endExclusive };
   }
 
   const [users, total] = await Promise.all([
