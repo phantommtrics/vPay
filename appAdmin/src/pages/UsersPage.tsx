@@ -15,6 +15,16 @@ import {
 } from '../lib/dateRange';
 import { formatName } from '../lib/format';
 
+/** Join day in UTC — matches startDate/endDate filter bounds on the API. */
+function formatJoinDate(value: string): string {
+  return new Date(value).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 const PAGE_SIZES = [25, 50, 100] as const;
 
 export function UsersPage() {
@@ -232,7 +242,7 @@ export function UsersPage() {
                         <Badge status={user.directPayProvisioningStatus} />
                       </td>
                       <td className="text-[var(--color-text-muted)]">
-                        {new Date(user.createdAt).toLocaleDateString()}
+                        {formatJoinDate(user.createdAt)}
                       </td>
                     </tr>
                   ))}

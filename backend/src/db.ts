@@ -591,8 +591,8 @@ export async function listAdminUsers(params: {
   search?: string;
   stripeStatus?: StripeProvisioningStatus;
   directPayStatus?: DirectPayProvisioningStatus;
-  startDate?: string;
-  endDate?: string;
+  /** Inclusive calendar-day bounds (YYYY-MM-DD) for user join date (`createdAt`). */
+  createdAt?: { gte: Date; lt: Date };
   page?: number;
   limit?: number;
 }): Promise<{ users: User[]; total: number }> {
@@ -619,19 +619,17 @@ export async function listAdminUsers(params: {
       { lastName: { contains: q, mode: 'insensitive' } },
     ];
   }
-  if (params.startDate || params.endDate) {
-    const startStr = params.startDate ?? params.endDate!;
-    const endStr = params.endDate ?? params.startDate!;
-    const start = new Date(`${startStr}T00:00:00.000Z`);
-    const endExclusive = new Date(`${endStr}T00:00:00.000Z`);
-    endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
-    where.createdAt = { gte: start, lt: endExclusive };
+  if (params.createdAt) {
+    where.createdAt = params.createdAt;
   }
 
   const [users, total] = await Promise.all([
     prisma.user.findMany({
       where,
-      orderBy: [{ kycSubmittedAt: 'desc' }, { createdAt: 'desc' }],
+      // KYC queue prioritizes submission time; customer list uses join date.
+      orderBy: params.kycStatus
+        ? [{ kycSubmittedAt: 'desc' }, { createdAt: 'desc' }]
+        : { createdAt: 'desc' },
       skip,
       take: limit,
     }),

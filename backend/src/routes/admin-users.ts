@@ -17,6 +17,7 @@ import {
 import { listUserDevicesForAdmin, clearUserDeviceLock } from '../device/service.js';
 import { log } from '../logger.js';
 import type { AdminAuthedRequest } from '../middleware/admin-auth.js';
+import { reportCreatedAtFilter } from '../reports/date-range.js';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -68,6 +69,16 @@ export async function handleListAdminUsers(req: AdminAuthedRequest, res: Respons
     return;
   }
 
+  let createdAt: { gte: Date; lt: Date } | undefined;
+  try {
+    createdAt = reportCreatedAtFilter(parsed.data.startDate, parsed.data.endDate);
+  } catch (err) {
+    res.status(400).json({
+      error: err instanceof Error ? err.message : 'Invalid date range',
+    });
+    return;
+  }
+
   const { users, total } = await listAdminUsers({
     kycStatus: parsed.data.kycStatus ? parseKycStatus(parsed.data.kycStatus) : undefined,
     search: parsed.data.search,
@@ -77,8 +88,7 @@ export async function handleListAdminUsers(req: AdminAuthedRequest, res: Respons
     directPayStatus: parsed.data.directPayStatus
       ? parseDirectPayStatus(parsed.data.directPayStatus)
       : undefined,
-    startDate: parsed.data.startDate,
-    endDate: parsed.data.endDate,
+    createdAt,
     page: parsed.data.page,
     limit: parsed.data.limit,
   });
