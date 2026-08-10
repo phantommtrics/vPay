@@ -2,7 +2,7 @@
   "expo": {
     "name": "vPay",
     "slug": "vpay",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vpay",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "gm.phantommetrics.vpay",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",
@@ -43,6 +43,16 @@
       "./plugins/withAndroidUploadSigning",
       "./plugins/withAndroidProduction",
       "./plugins/withIosFmtXcode26Fix",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
+          }
+        }
+      ],
       "expo-router",
       [
         "expo-splash-screen",

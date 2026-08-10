@@ -66,6 +66,7 @@ enum AdminUserStatus {
 
 enum AccountStatus {
   ACTIVE
+  BLOCKED
   TERMINATED
 }
 
@@ -159,6 +160,8 @@ model User {
   countryCode              String?                  @map("country_code")
   postalCode               String?                  @map("postal_code")
   accountStatus            AccountStatus            @default(ACTIVE) @map("account_status")
+  blockedAt                DateTime?                @map("blocked_at")
+  blockedReason            String?                  @map("blocked_reason")
   terminatedAt             DateTime?                @map("terminated_at")
   kycStatus                KycStatus                @default(INCOMPLETE) @map("kyc_status")
   kycComplete              Boolean                  @default(false) @map("kyc_complete")

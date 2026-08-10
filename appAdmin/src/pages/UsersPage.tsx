@@ -215,6 +215,7 @@ export function UsersPage() {
                   <tr>
                     <th>Customer</th>
                     <th>Email</th>
+                    <th>Status</th>
                     <th>KYC</th>
                     <th>Card</th>
                     <th>directPay</th>
@@ -232,6 +233,9 @@ export function UsersPage() {
                         {formatName(user.firstName, user.lastName, user.email)}
                       </td>
                       <td className="text-[var(--color-text-muted)]">{user.email}</td>
+                      <td>
+                        <Badge status={user.accountStatus} dot />
+                      </td>
                       <td>
                         <Badge status={user.kycStatus} dot />
                       </td>

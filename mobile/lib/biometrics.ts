@@ -66,7 +66,10 @@ export function getBiometricLabel(method: BiometricMethod): string {
   }
 }
 
-export function getLockHint(method: BiometricMethod): string {
+export function getLockHint(
+  method: BiometricMethod,
+  credentialType?: 'pin' | 'password' | null,
+): string {
   switch (method) {
     case 'faceId':
       return 'Face ID is required to unlock';
@@ -75,6 +78,8 @@ export function getLockHint(method: BiometricMethod): string {
     case 'androidBiometric':
       return 'Biometric authentication required';
     default:
+      if (credentialType === 'pin') return 'Enter your PIN to unlock';
+      if (credentialType === 'password') return 'Enter your password to unlock';
       return 'Sign in to continue';
   }
 }

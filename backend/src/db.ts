@@ -78,6 +78,11 @@ export type AdminCardSummary = {
 };
 
 export type AdminUser = PublicUser & {
+  accountStatus: 'active' | 'blocked' | 'terminated';
+  blockedAt: string | null;
+  blockedReason: string | null;
+  terminatedAt: string | null;
+  originalEmail: string | null;
   directPaySlug: string | null;
   cardIssuancePaidAt: string | null;
   cardIssuanceFeeUsd: number | null;
@@ -95,6 +100,7 @@ export type AdminUserSummary = {
   email: string;
   firstName: string | null;
   lastName: string | null;
+  accountStatus: 'active' | 'blocked' | 'terminated';
   kycStatus: PublicUser['kycStatus'];
   kycComplete: boolean;
   kycSubmittedAt: string | null;
@@ -141,6 +147,10 @@ function toDirectPayProvisioningStatus(
   status: DirectPayProvisioningStatus,
 ): PublicUser['directPayProvisioningStatus'] {
   return status.toLowerCase() as PublicUser['directPayProvisioningStatus'];
+}
+
+function toAccountStatus(status: AccountStatus): AdminUserSummary['accountStatus'] {
+  return status.toLowerCase() as AdminUserSummary['accountStatus'];
 }
 
 export async function toPublicUser(user: User): Promise<PublicUser> {
@@ -196,6 +206,7 @@ export function toAdminUserSummary(user: User): AdminUserSummary {
     email: user.email,
     firstName: user.firstName,
     lastName: user.lastName,
+    accountStatus: toAccountStatus(user.accountStatus),
     kycStatus: toKycStatus(user.kycStatus),
     kycComplete: user.kycComplete,
     kycSubmittedAt: user.kycSubmittedAt?.toISOString() ?? null,
@@ -237,6 +248,11 @@ export async function toAdminUser(user: User): Promise<AdminUser> {
 
   return {
     ...(await toPublicUser(user)),
+    accountStatus: toAccountStatus(user.accountStatus),
+    blockedAt: user.blockedAt?.toISOString() ?? null,
+    blockedReason: user.blockedReason,
+    terminatedAt: user.terminatedAt?.toISOString() ?? null,
+    originalEmail: user.originalEmail,
     directPaySlug: user.directPaySlug,
     cardIssuancePaidAt: user.cardIssuancePaidAt?.toISOString() ?? null,
     cardIssuanceFeeUsd: user.cardIssuanceFeeUsd,

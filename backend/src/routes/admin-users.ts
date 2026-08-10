@@ -6,6 +6,11 @@ import {
 } from '@prisma/client';
 import { z } from 'zod';
 
+import { AccountBlockError, blockAccount, unblockAccount } from '../account/block.js';
+import {
+  AccountTerminateError,
+  adminTerminateAccount,
+} from '../account/terminate.js';
 import {
   findUserByEmail,
   findUserById,
@@ -18,6 +23,7 @@ import { listUserDevicesForAdmin, clearUserDeviceLock } from '../device/service.
 import { log } from '../logger.js';
 import type { AdminAuthedRequest } from '../middleware/admin-auth.js';
 import { reportCreatedAtFilter } from '../reports/date-range.js';
+import { formatZodError } from '../zod-utils.js';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
@@ -44,6 +50,14 @@ const listQuerySchema = z
       });
     }
   });
+
+const blockBodySchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
+
+const terminateBodySchema = z.object({
+  reason: z.string().trim().max(500).optional(),
+});
 
 function parseKycStatus(value: string): KycStatus {
   return value.toUpperCase() as KycStatus;
@@ -155,6 +169,98 @@ export async function handleAdminUnlockUserDevice(
 
   const updated = await findUserById(userId);
   res.json({ user: updated ? await toAdminUser(updated) : null });
+}
+
+export async function handleAdminBlockUser(req: AdminAuthedRequest, res: Response): Promise<void> {
+  const parsed = blockBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: formatZodError(parsed.error) });
+    return;
+  }
+
+  const userId = String(req.params.userId);
+  try {
+    await blockAccount(userId, {
+      adminUserId: req.adminUserId,
+      reason: parsed.data.reason,
+    });
+    const updated = await findUserById(userId);
+    res.json({ user: updated ? await toAdminUser(updated) : null });
+  } catch (err) {
+    if (err instanceof AccountBlockError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+    if (err instanceof AccountTerminateError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+    log('Admin block customer failed', {
+      adminUserId: req.adminUserId ?? null,
+      customerUserId: userId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    res.status(500).json({ error: 'Failed to block customer' });
+  }
+}
+
+export async function handleAdminUnblockUser(req: AdminAuthedRequest, res: Response): Promise<void> {
+  const userId = String(req.params.userId);
+  try {
+    await unblockAccount(userId, { adminUserId: req.adminUserId });
+    const updated = await findUserById(userId);
+    res.json({ user: updated ? await toAdminUser(updated) : null });
+  } catch (err) {
+    if (err instanceof AccountBlockError) {
+      res.status(err.status).json({ error: err.message, code: err.code });
+      return;
+    }
+    log('Admin unblock customer failed', {
+      adminUserId: req.adminUserId ?? null,
+      customerUserId: userId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    res.status(500).json({ error: 'Failed to unblock customer' });
+  }
+}
+
+export async function handleAdminTerminateUser(
+  req: AdminAuthedRequest,
+  res: Response,
+): Promise<void> {
+  const parsed = terminateBodySchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: formatZodError(parsed.error) });
+    return;
+  }
+
+  const userId = String(req.params.userId);
+  try {
+    const result = await adminTerminateAccount(userId, {
+      adminUserId: req.adminUserId,
+      reason: parsed.data.reason,
+    });
+    const updated = await findUserById(userId);
+    res.json({
+      user: updated ? await toAdminUser(updated) : null,
+      zeroedBalanceGmd: result.zeroedBalanceGmd,
+    });
+  } catch (err) {
+    if (err instanceof AccountTerminateError) {
+      res.status(err.status).json({
+        error: err.message,
+        code: err.code,
+        ...(err.details ?? {}),
+      });
+      return;
+    }
+    log('Admin terminate customer failed', {
+      adminUserId: req.adminUserId ?? null,
+      customerUserId: userId,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+    res.status(500).json({ error: 'Failed to terminate customer account' });
+  }
 }
 
 export async function handleLookupAdminUser(req: AdminAuthedRequest, res: Response): Promise<void> {

@@ -14,12 +14,14 @@ export type AdminProfile = {
 
 export type KycStatus = 'incomplete' | 'pending' | 'approved' | 'rejected';
 export type ProvisioningStatus = 'none' | 'pending' | 'active' | 'failed';
+export type AccountStatus = 'active' | 'blocked' | 'terminated';
 
 export type AdminUserSummary = {
   id: string;
   email: string;
   firstName: string | null;
   lastName: string | null;
+  accountStatus: AccountStatus;
   kycStatus: KycStatus;
   kycComplete: boolean;
   kycSubmittedAt: string | null;
@@ -116,6 +118,10 @@ export type AdminUser = AdminUserSummary & {
   deviceLockEnabled: boolean;
   monthlyDevicesUsed: number;
   monthlyDevicesLimit: number;
+  blockedAt: string | null;
+  blockedReason: string | null;
+  terminatedAt: string | null;
+  originalEmail: string | null;
 };
 
 export type AdminCardSummary = {
@@ -333,6 +339,33 @@ export function unlockAdminUserDevice(token: string, userId: string) {
     method: 'POST',
     token,
   });
+}
+
+export function blockAdminUser(token: string, userId: string, reason?: string) {
+  return request<{ user: AdminUser }>(`/api/admin/users/${userId}/block`, {
+    method: 'POST',
+    token,
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+}
+
+export function unblockAdminUser(token: string, userId: string) {
+  return request<{ user: AdminUser }>(`/api/admin/users/${userId}/unblock`, {
+    method: 'POST',
+    token,
+    body: '{}',
+  });
+}
+
+export function terminateAdminUser(token: string, userId: string, reason?: string) {
+  return request<{ user: AdminUser; zeroedBalanceGmd: number }>(
+    `/api/admin/users/${userId}/terminate`,
+    {
+      method: 'POST',
+      token,
+      body: JSON.stringify(reason ? { reason } : {}),
+    },
+  );
 }
 
 export function fetchCustomerDeviceGroups(

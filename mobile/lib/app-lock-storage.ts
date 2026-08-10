@@ -24,3 +24,18 @@ export function consumeSkipNextAppLock(): boolean {
   skipNextAppLock = false;
   return shouldSkip;
 }
+
+let pendingCredentialPrompt = false;
+
+/** Call after a fresh OTP sign-in to suggest setting an unlock PIN/password. */
+export function markPendingCredentialPrompt(): void {
+  pendingCredentialPrompt = true;
+}
+
+export function clearPendingCredentialPrompt(): void {
+  pendingCredentialPrompt = false;
+}
+
+export function hasPendingCredentialPrompt(): boolean {
+  return pendingCredentialPrompt;
+}

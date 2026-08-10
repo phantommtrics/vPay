@@ -10,10 +10,13 @@ import { DetailRow, DetailSection } from '../components/ui/DetailSection';
 import { Tabs } from '../components/ui/Tabs';
 import {
   approveKyc,
+  blockAdminUser,
   fetchAdminStats,
   fetchAdminUser,
   fetchUserDevices,
   unlockAdminUserDevice,
+  unblockAdminUser,
+  terminateAdminUser,
   fetchUserFundingOrders,
   fetchUserWallet,
   fetchUserWalletTransactions,
@@ -55,7 +58,10 @@ export function UserDetailPage() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<null | 'approve' | 'card-free' | 'card-charge' | 'directpay' | 'unlock-device'>(null);
+  const [confirm, setConfirm] = useState<
+    null | 'approve' | 'card-free' | 'card-charge' | 'directpay' | 'unlock-device' | 'block' | 'unblock' | 'terminate'
+  >(null);
+  const [actionReason, setActionReason] = useState('');
   const [cardAction, setCardAction] = useState<{
     card: AdminCardSummary;
     action: 'freeze' | 'unfreeze';
@@ -112,12 +118,40 @@ export function UserDetailPage() {
         const { user: updated } = await unlockAdminUserDevice(token, user.id);
         setUser(updated);
         setMessage('Device lock cleared. The customer can sign in from any device.');
+      } else if (confirm === 'block') {
+        const { user: updated } = await blockAdminUser(
+          token,
+          user.id,
+          actionReason.trim() || undefined,
+        );
+        setUser(updated);
+        setMessage('Customer blocked. Login is denied until reactivated.');
+      } else if (confirm === 'unblock') {
+        const { user: updated } = await unblockAdminUser(token, user.id);
+        setUser(updated);
+        setMessage('Customer reactivated. Login is allowed again.');
+      } else if (confirm === 'terminate') {
+        const { user: updated, zeroedBalanceGmd } = await terminateAdminUser(
+          token,
+          user.id,
+          actionReason.trim() || undefined,
+        );
+        setUser(updated);
+        setMessage(
+          zeroedBalanceGmd > 0
+            ? `Wallet zeroed (${formatGmd(zeroedBalanceGmd)}) and account terminated.`
+            : 'Account terminated. Wallet and cards are closed.',
+        );
       }
       setConfirm(null);
-      await load();
+      setActionReason('');
+      setBusy(false);
+      // Refresh in background so a slow wallet/Stripe reload can't leave the dialog stuck.
+      void load().catch((err) => {
+        setError(err instanceof Error ? err.message : 'Failed to refresh customer');
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Action failed');
-    } finally {
       setBusy(false);
     }
   };
@@ -168,6 +202,7 @@ export function UserDetailPage() {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <Badge status={user.accountStatus} dot />
             <Badge status={user.kycStatus} dot />
             <Badge status={user.stripeProvisioningStatus} />
             <Badge status={user.directPayProvisioningStatus} />
@@ -202,6 +237,19 @@ export function UserDetailPage() {
             <div className="lg:col-span-2 space-y-6">
               <DetailSection title="Customer details">
                 <DetailRow label="Customer ID" value={<CopyId value={user.id} />} />
+                <DetailRow label="Account status" value={<Badge status={user.accountStatus} dot />} />
+                {user.accountStatus === 'blocked' ? (
+                  <>
+                    <DetailRow label="Blocked at" value={formatDate(user.blockedAt)} />
+                    <DetailRow label="Block reason" value={user.blockedReason ?? '—'} />
+                  </>
+                ) : null}
+                {user.accountStatus === 'terminated' ? (
+                  <>
+                    <DetailRow label="Terminated at" value={formatDate(user.terminatedAt)} />
+                    <DetailRow label="Original email" value={user.originalEmail ?? '—'} />
+                  </>
+                ) : null}
                 <DetailRow label="Phone" value={user.phone ?? '—'} />
                 <DetailRow label="Date of birth" value={user.dateOfBirth ?? '—'} />
                 <DetailRow
@@ -210,6 +258,58 @@ export function UserDetailPage() {
                 />
                 <DetailRow label="Member since" value={formatDate(user.createdAt)} />
               </DetailSection>
+
+              {user.accountStatus !== 'terminated' ? (
+                <section className="panel">
+                  <div className="panel-header">
+                    <h3 className="text-sm font-semibold text-[var(--color-heading)]">Account controls</h3>
+                  </div>
+                  <div className="panel-body space-y-3">
+                    <p className="text-sm text-[var(--color-text-muted)]">
+                      Block denies login and freezes cards. Terminate zeros any remaining wallet
+                      balance and closes the vPay wallet (same end state as self-serve delete).
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {user.accountStatus === 'blocked' ? (
+                        <button
+                          type="button"
+                          className="btn-primary"
+                          disabled={busy}
+                          onClick={() => {
+                            setActionReason('');
+                            setConfirm('unblock');
+                          }}
+                        >
+                          Set active
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn-secondary btn-danger"
+                          disabled={busy}
+                          onClick={() => {
+                            setActionReason('');
+                            setConfirm('block');
+                          }}
+                        >
+                          Block customer
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn-secondary btn-danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setActionReason('');
+                          setConfirm('terminate');
+                        }}
+                      >
+                        Zero wallet &amp; terminate
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              ) : null}
             </div>
             <div className="space-y-4">
               <div className="panel p-5">
@@ -640,6 +740,70 @@ export function UserDetailPage() {
         onConfirm={() => void runAction()}
         onCancel={() => setConfirm(null)}
       />
+      <ConfirmDialog
+        open={confirm === 'block'}
+        title="Block customer"
+        description={`Block ${user.email}? They will be unable to sign in, and active cards will be frozen. You can set the account active again later.`}
+        confirmLabel="Block customer"
+        destructive
+        loading={busy}
+        onConfirm={() => void runAction()}
+        onCancel={() => {
+          setConfirm(null);
+          setActionReason('');
+        }}
+      >
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-gray-700">Reason (optional)</span>
+          <input
+            type="text"
+            value={actionReason}
+            onChange={(e) => setActionReason(e.target.value)}
+            maxLength={500}
+            placeholder="e.g. Suspected fraud"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          />
+        </label>
+      </ConfirmDialog>
+      <ConfirmDialog
+        open={confirm === 'unblock'}
+        title="Set account active"
+        description={`Reactivate ${user.email}? They will be able to sign in again. Frozen cards stay frozen until you unfreeze them.`}
+        confirmLabel="Set active"
+        loading={busy}
+        onConfirm={() => void runAction()}
+        onCancel={() => setConfirm(null)}
+      />
+      <ConfirmDialog
+        open={confirm === 'terminate'}
+        title="Zero wallet & terminate"
+        description={`Permanently terminate ${user.email}? Any remaining wallet balance will be zeroed, cards frozen, and the account closed. This cannot be undone.`}
+        confirmLabel="Terminate account"
+        destructive
+        loading={busy}
+        onConfirm={() => void runAction()}
+        onCancel={() => {
+          setConfirm(null);
+          setActionReason('');
+        }}
+      >
+        <label className="block text-sm">
+          <span className="mb-1.5 block font-medium text-gray-700">Reason (optional)</span>
+          <input
+            type="text"
+            value={actionReason}
+            onChange={(e) => setActionReason(e.target.value)}
+            maxLength={500}
+            placeholder="e.g. Compliance request"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:border-emerald-600"
+          />
+        </label>
+        {wallet?.wallet && wallet.wallet.balanceGmd > 0 ? (
+          <p className="mt-3 text-sm text-[#df1b41]">
+            Current wallet balance {formatGmd(wallet.wallet.balanceGmd)} will be zeroed.
+          </p>
+        ) : null}
+      </ConfirmDialog>
       <ConfirmDialog
         open={cardAction?.action === 'freeze'}
         title="Freeze card"

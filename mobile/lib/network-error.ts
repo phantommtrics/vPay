@@ -25,12 +25,12 @@ export function toNetworkErrorMessage(error: unknown): string {
       detail,
     )
   ) {
-    return `Cannot reach ${host}. Check your internet connection, disable VPN or ad blockers, and try another network if needed.`;
+    return `Check your internet connection, disable VPN or ad blockers, and try another network if needed.`;
   }
 
   if (/SSL|certificate|CERT|handshake|TLS/i.test(detail)) {
     return `Secure connection to ${host} failed. Try again later or contact support.`;
   }
 
-  return `Unable to reach ${host}. Check your internet connection and try again.`;
+  return `Check your internet connection and try again.`;
 }

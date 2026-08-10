@@ -465,3 +465,82 @@ export async function postCardFundJournal(params: {
     lines,
   });
 }
+
+/**
+ * Admin account termination: remove remaining customer liability from the funds
+ * pool and recognize it on the terminated-balances income account.
+ *
+ * Mirrors card-fund / fee posting:
+ * - customer wallet debit (audit-only; wallet service already mutated balance)
+ * - customer funds pool debit
+ * - terminated-balances credit
+ */
+export async function postAccountTerminationJournal(params: {
+  walletId: string;
+  walletTransactionId: string;
+  amountGmd: number;
+  productCode?: ProductCode;
+  ucpCode?: UcpCode;
+  metadata?: Prisma.InputJsonValue;
+}): Promise<JournalEntry | null> {
+  if (params.amountGmd <= 0) return null;
+
+  const productCode = params.productCode ?? PRODUCT_CODES.ACCOUNT_TERMINATION;
+  const ucpCode = params.ucpCode ?? UCP_CODES.ACCOUNT_TERMINATION_FORFEITURE;
+
+  const [fundPoolId, incomeAccountId] = await Promise.all([
+    resolveFundHoldingAccount(productCode),
+    resolveFeeDestinationAccount(productCode, ucpCode),
+  ]);
+
+  if (!fundPoolId) {
+    log('Fund holding account not configured; skipping termination journal', {
+      walletTransactionId: params.walletTransactionId,
+      amountGmd: params.amountGmd,
+    });
+    return null;
+  }
+
+  if (!incomeAccountId) {
+    log('Terminated balances income account not configured; skipping termination journal', {
+      walletTransactionId: params.walletTransactionId,
+      amountGmd: params.amountGmd,
+    });
+    return null;
+  }
+
+  return postJournalEntry({
+    referenceType: 'wallet_transaction',
+    referenceId: params.walletTransactionId,
+    description: 'Admin account termination — wallet zero',
+    metadata: params.metadata,
+    lines: [
+      {
+        accountType: JournalAccountType.CUSTOMER_WALLET,
+        accountId: params.walletId,
+        debit: params.amountGmd,
+        walletTransactionId: params.walletTransactionId,
+        productCode,
+        ucpCode,
+        description: 'Customer wallet debit',
+        auditOnly: true,
+      },
+      {
+        accountType: JournalAccountType.BUSINESS_ACCOUNT,
+        accountId: fundPoolId,
+        debit: params.amountGmd,
+        productCode,
+        ucpCode,
+        description: 'Customer funds pool debit',
+      },
+      {
+        accountType: JournalAccountType.BUSINESS_ACCOUNT,
+        accountId: incomeAccountId,
+        credit: params.amountGmd,
+        productCode,
+        ucpCode,
+        description: 'Terminated balances income',
+      },
+    ],
+  });
+}

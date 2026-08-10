@@ -5,6 +5,7 @@ export const PRODUCT_CODES = {
   CARD_ISSUANCE: 'card-issuance',
   CARD_FUND: 'card-fund',
   CARD_EXPIRY: 'card-expiry',
+  ACCOUNT_TERMINATION: 'account-termination',
 } as const;
 
 export type ProductCode = (typeof PRODUCT_CODES)[keyof typeof PRODUCT_CODES];
@@ -16,6 +17,7 @@ export const UCP_CODES = {
   CARD_FUND_FEE_PERCENT: 'card-fund-fee-percent',
   CARD_ISSUANCE_FEE_USD: 'card-issuance-fee-usd',
   CARD_EXPIRY_YEARS: 'card-expiry-years',
+  ACCOUNT_TERMINATION_FORFEITURE: 'account-termination-forfeiture',
 } as const;
 
 export type UcpCode = (typeof UCP_CODES)[keyof typeof UCP_CODES];
@@ -24,6 +26,7 @@ export type UcpCode = (typeof UCP_CODES)[keyof typeof UCP_CODES];
 export const BUSINESS_ACCOUNT_CODES = {
   PAYMENTS_RECEIVED: 'payments-received',
   CARD_FUNDING_CLEARING: 'card-funding-clearing',
+  TERMINATED_BALANCES: 'terminated-balances',
 } as const;
 
 export type BusinessAccountCode = (typeof BUSINESS_ACCOUNT_CODES)[keyof typeof BUSINESS_ACCOUNT_CODES];

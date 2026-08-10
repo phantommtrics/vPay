@@ -93,8 +93,18 @@ export async function requireAuth(
   try {
     const payload = verifyToken(header.slice(7));
     const user = await findUserById(payload.sub);
-    if (!user || user.accountStatus === AccountStatus.TERMINATED) {
-      res.status(401).json({ error: 'Invalid or expired session' });
+    if (
+      !user ||
+      user.accountStatus === AccountStatus.TERMINATED ||
+      user.accountStatus === AccountStatus.BLOCKED
+    ) {
+      res.status(401).json({
+        error:
+          user?.accountStatus === AccountStatus.BLOCKED
+            ? 'This account has been blocked. Contact support.'
+            : 'Invalid or expired session',
+        ...(user?.accountStatus === AccountStatus.BLOCKED ? { code: 'ACCOUNT_BLOCKED' } : {}),
+      });
       return;
     }
     req.userId = payload.sub;
@@ -114,6 +124,14 @@ export async function handleSendOtp(req: Request, res: Response): Promise<void> 
   const email = parsed.data.email.toLowerCase();
   const deviceInput = parsed.data.device;
   const existingUser = await findActiveUserByEmail(email);
+
+  if (existingUser?.accountStatus === AccountStatus.BLOCKED) {
+    res.status(403).json({
+      error: 'This account has been blocked. Contact support.',
+      code: 'ACCOUNT_BLOCKED',
+    });
+    return;
+  }
 
   if (existingUser && deviceInput) {
     try {
@@ -195,6 +213,14 @@ export async function handleVerifyOtp(req: Request, res: Response): Promise<void
   await deleteOtp(email);
 
   let user = await findActiveUserByEmail(email);
+  if (user?.accountStatus === AccountStatus.BLOCKED) {
+    res.status(403).json({
+      error: 'This account has been blocked. Contact support.',
+      code: 'ACCOUNT_BLOCKED',
+    });
+    return;
+  }
+
   if (!user) {
     user = await createUser(email);
     log('New user created', { userId: user.id, email });

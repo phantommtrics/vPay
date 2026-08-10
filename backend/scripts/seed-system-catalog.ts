@@ -212,6 +212,17 @@ async function main(): Promise<void> {
     productUnitType: ProductUnitType.MONETARY,
   });
 
+  const accountTerminationProduct = await upsertProduct({
+    code: PRODUCT_CODES.ACCOUNT_TERMINATION,
+    name: 'account-termination',
+    displayName: 'Account termination',
+    description: 'Admin zero of remaining vPay wallet balance on account termination',
+    serviceId: walletService.id,
+    currency: 'GMD',
+    denominationUnitType: DenominationUnitType.FLEX,
+    productUnitType: ProductUnitType.MONETARY,
+  });
+
   const exchangeRateUcp = await upsertUcp({
     code: UCP_CODES.GMD_USD_EXCHANGE_RATE,
     name: 'GMD/USD exchange rate',
@@ -260,6 +271,16 @@ async function main(): Promise<void> {
     ucpType: UcpType.FIXED,
     calculationType: UcpCalculationType.EXCLUSIVE,
     fixedValue: cardExpiryYears,
+  });
+
+  const accountTerminationUcp = await upsertUcp({
+    code: UCP_CODES.ACCOUNT_TERMINATION_FORFEITURE,
+    name: 'Account termination forfeiture',
+    description: 'Routes zeroed wallet balances to terminated-balances income on admin terminate',
+    unit: UcpUnit.FEES,
+    ucpType: UcpType.FIXED,
+    calculationType: UcpCalculationType.EXCLUSIVE,
+    fixedValue: 0,
   });
 
   const settlements = await Promise.all([
@@ -317,6 +338,13 @@ async function main(): Promise<void> {
       description: 'Card validity in years',
       productId: cardExpiryProduct.id,
       ucpId: cardExpiryUcp.id,
+      priority: 0,
+    }),
+    upsertSettlementRequest({
+      name: 'Account termination forfeiture',
+      description: 'Recognize zeroed wallet balances as terminated-balances income',
+      productId: accountTerminationProduct.id,
+      ucpId: accountTerminationUcp.id,
       priority: 0,
     }),
   ]);
@@ -386,6 +414,29 @@ async function main(): Promise<void> {
       entityId: feeIncomeEntity.id,
       code: 'card-fund-fees',
       name: 'Card funding fees',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+  });
+
+  const terminatedBalancesAccount = await prisma.businessAccount.upsert({
+    where: {
+      entityId_code: {
+        entityId: feeIncomeEntity.id,
+        code: BUSINESS_ACCOUNT_CODES.TERMINATED_BALANCES,
+      },
+    },
+    update: {
+      name: 'Terminated balances',
+      currency: 'GMD',
+      purpose: BusinessAccountPurpose.FEE_INCOME,
+      status: CatalogStatus.ACTIVE,
+    },
+    create: {
+      entityId: feeIncomeEntity.id,
+      code: BUSINESS_ACCOUNT_CODES.TERMINATED_BALANCES,
+      name: 'Terminated balances',
       currency: 'GMD',
       purpose: BusinessAccountPurpose.FEE_INCOME,
       status: CatalogStatus.ACTIVE,
@@ -464,6 +515,10 @@ async function main(): Promise<void> {
     where: { id: cardFundProduct.id },
     data: { fundHoldingAccountId: customerFundsPoolAccount.id },
   });
+  await prisma.product.update({
+    where: { id: accountTerminationProduct.id },
+    data: { fundHoldingAccountId: customerFundsPoolAccount.id },
+  });
 
   await prisma.settlementRequest.update({
     where: {
@@ -483,15 +538,26 @@ async function main(): Promise<void> {
     },
     data: { feeDestinationAccountId: cardFundFeesAccount.id },
   });
+  await prisma.settlementRequest.update({
+    where: {
+      productId_ucpId: {
+        productId: accountTerminationProduct.id,
+        ucpId: accountTerminationUcp.id,
+      },
+    },
+    data: { feeDestinationAccountId: terminatedBalancesAccount.id },
+  });
 
   invalidatePlatformConfigCache();
 
   console.log('Seeded system catalog:');
   console.log(`  Services: ${platformService.name}, ${walletService.name}, ${cardService.name}`);
-  console.log(`  Products: 5 (exchange-rate, wallet-topup, card-issuance, card-fund, card-expiry)`);
-  console.log(`  UCPs: 5`);
+  console.log(
+    `  Products: 6 (exchange-rate, wallet-topup, card-issuance, card-fund, card-expiry, account-termination)`,
+  );
+  console.log(`  UCPs: 6`);
   console.log(`  Settlement requests: ${settlements.length}`);
-  console.log(`  Business entity: ${feeIncomeEntity.name} with 6 accounts`);
+  console.log(`  Business entity: ${feeIncomeEntity.name} with 7 accounts`);
 }
 
 main()

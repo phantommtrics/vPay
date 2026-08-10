@@ -11,6 +11,13 @@ import { AppState, type AppStateStatus } from 'react-native';
 
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  clearAppLockCredential,
+  getAppLockCredentialInfo,
+  setAppLockCredential,
+  verifyAppLockCredential,
+  type AppLockCredentialType,
+} from '@/lib/app-lock-credential';
+import {
   consumeSkipNextAppLock,
   getAppLockEnabled,
   setAppLockEnabled as persistAppLockEnabled,
@@ -30,9 +37,14 @@ type AppLockContextValue = {
   isChecking: boolean;
   biometricsAvailable: boolean;
   biometricMethod: BiometricMethod;
+  credentialType: AppLockCredentialType | null;
+  hasCredential: boolean;
   appLockEnabled: boolean;
   setAppLockEnabled: (enabled: boolean) => Promise<void>;
+  setCredential: (type: AppLockCredentialType, secret: string) => Promise<void>;
+  clearCredential: () => Promise<void>;
   unlock: () => Promise<boolean>;
+  unlockWithCredential: (secret: string) => Promise<boolean>;
   lock: () => void;
   runWithLockDeferred: <T>(fn: () => Promise<T>) => Promise<T>;
 };
@@ -44,6 +56,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [biometricMethod, setBiometricMethod] = useState<BiometricMethod>('none');
+  const [credentialType, setCredentialType] = useState<AppLockCredentialType | null>(null);
   const [appLockEnabled, setAppLockEnabledState] = useState(true);
   const [biometricsReady, setBiometricsReady] = useState(false);
   const isAuthenticating = useRef(false);
@@ -58,6 +71,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   }, [isUnlocked]);
 
   const biometricsAvailable = biometricMethod !== 'none';
+  const hasCredential = credentialType !== null;
   const lockRequired = Boolean(user) && !authLoading && appLockEnabled;
 
   const lock = useCallback(() => {
@@ -104,6 +118,25 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     [user, lock],
   );
 
+  const refreshCredential = useCallback(async () => {
+    const info = await getAppLockCredentialInfo();
+    setCredentialType(info?.type ?? null);
+    return info;
+  }, []);
+
+  const setCredential = useCallback(
+    async (type: AppLockCredentialType, secret: string) => {
+      await setAppLockCredential(type, secret);
+      setCredentialType(type);
+    },
+    [],
+  );
+
+  const clearCredential = useCallback(async () => {
+    await clearAppLockCredential();
+    setCredentialType(null);
+  }, []);
+
   const refreshBiometrics = useCallback(async () => {
     const method = await resolveBiometricMethod();
     setBiometricMethod(method);
@@ -142,14 +175,45 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     }
   }, [lockRequired, biometricsAvailable, biometricMethod]);
 
+  const unlockWithCredential = useCallback(
+    async (secret: string): Promise<boolean> => {
+      if (!lockRequired) {
+        setIsUnlocked(true);
+        return true;
+      }
+
+      if (!hasCredential || isAuthenticating.current) {
+        return false;
+      }
+
+      isAuthenticating.current = true;
+      setIsChecking(true);
+
+      try {
+        const ok = await verifyAppLockCredential(secret);
+        if (ok) {
+          setIsUnlocked(true);
+          return true;
+        }
+        setIsUnlocked(false);
+        return false;
+      } finally {
+        isAuthenticating.current = false;
+        setIsChecking(false);
+      }
+    },
+    [lockRequired, hasCredential],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
       try {
-        const [method, enabled] = await Promise.all([
+        const [method, enabled, credential] = await Promise.all([
           resolveBiometricMethod(),
           getAppLockEnabled(),
+          getAppLockCredentialInfo(),
         ]);
 
         if (cancelled) return;
@@ -157,6 +221,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         setBiometricMethod(method);
         setBiometricsReady(true);
         setAppLockEnabledState(enabled);
+        setCredentialType(credential?.type ?? null);
 
         if (!user || authLoading) {
           if (!user) {
@@ -235,6 +300,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
       if (nextAppState === 'active') {
         refreshBiometrics();
+        void refreshCredential();
 
         if (deferLockCount.current > 0) {
           backgroundSince.current = null;
@@ -253,7 +319,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.remove();
-  }, [lockRequired, lock, refreshBiometrics]);
+  }, [lockRequired, lock, refreshBiometrics, refreshCredential]);
 
   useEffect(() => {
     if (!user) {
@@ -268,12 +334,17 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       isLocked,
-      isChecking: isChecking && lockRequired && biometricsAvailable,
+      isChecking: isChecking && lockRequired && (biometricsAvailable || hasCredential),
       biometricsAvailable,
       biometricMethod,
+      credentialType,
+      hasCredential,
       appLockEnabled,
       setAppLockEnabled,
+      setCredential,
+      clearCredential,
       unlock,
+      unlockWithCredential,
       lock,
       runWithLockDeferred,
     }),
@@ -283,9 +354,14 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
       lockRequired,
       biometricsAvailable,
       biometricMethod,
+      credentialType,
+      hasCredential,
       appLockEnabled,
       setAppLockEnabled,
+      setCredential,
+      clearCredential,
       unlock,
+      unlockWithCredential,
       lock,
       runWithLockDeferred,
     ],

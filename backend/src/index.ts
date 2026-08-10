@@ -110,6 +110,9 @@ import {
   handleGetAdminUser,
   handleAdminUserDevices,
   handleAdminUnlockUserDevice,
+  handleAdminBlockUser,
+  handleAdminUnblockUser,
+  handleAdminTerminateUser,
   handleListAdminUsers,
   handleLookupAdminUser,
   handleAdminStats,
@@ -461,6 +464,24 @@ app.post(
   requireAdminAccess,
   perm.customersEdit,
   handleAdminUnlockUserDevice,
+);
+app.post(
+  '/api/admin/users/:userId/block',
+  requireAdminAccess,
+  perm.customersEdit,
+  handleAdminBlockUser,
+);
+app.post(
+  '/api/admin/users/:userId/unblock',
+  requireAdminAccess,
+  perm.customersEdit,
+  handleAdminUnblockUser,
+);
+app.post(
+  '/api/admin/users/:userId/terminate',
+  requireAdminAccess,
+  perm.customersEdit,
+  handleAdminTerminateUser,
 );
 
 app.get('/api/admin/customer-devices', requireAdminAccess, perm.deviceInfoView, handleListCustomerDeviceGroups);

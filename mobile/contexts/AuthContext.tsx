@@ -4,7 +4,7 @@ import * as api from '@/lib/api';
 import { clearToken, getToken, setToken } from '@/lib/auth-storage';
 import { collectDeviceInfo } from '@/lib/device-info';
 import { clearRegisteredDeviceId, setRegisteredDeviceId } from '@/lib/device-storage';
-import { markSkipNextAppLock } from '@/lib/app-lock-storage';
+import { markPendingCredentialPrompt, markSkipNextAppLock } from '@/lib/app-lock-storage';
 import type { KycSubmitPayload, ProfileUpdate, User } from '@/lib/types';
 
 type AuthContextValue = {
@@ -90,6 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await setRegisteredDeviceId(device.id);
     }
     markSkipNextAppLock();
+    markPendingCredentialPrompt();
     setUser(signedInUser);
   }, []);
 

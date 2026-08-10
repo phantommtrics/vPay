@@ -35,7 +35,8 @@ export async function assertPhoneAvailable(userId: string, phoneE164: string): P
   const taken = await prisma.user.findFirst({
     where: {
       phoneE164,
-      accountStatus: AccountStatus.ACTIVE,
+      // Blocked accounts still hold the phone; only terminated frees it.
+      accountStatus: { not: AccountStatus.TERMINATED },
       NOT: { id: userId },
     },
     select: { id: true },
