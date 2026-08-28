@@ -46,6 +46,12 @@ enum WalletTransactionType {
   CARD_FUND
   CARD_ISSUANCE
   ADJUSTMENT
+  CARD_UNLOAD
+}
+
+enum CardFundDirection {
+  FUND
+  UNLOAD
 }
 
 enum CardFundTransactionStatus {
@@ -489,6 +495,7 @@ model CardFundTransaction {
   gmdEstimateAfter       Float                     @map("gmd_estimate_after")
   stripeCredited         Boolean                   @default(false) @map("stripe_credited")
   stripeTransferId       String?                   @map("stripe_transfer_id")
+  direction              CardFundDirection         @default(FUND)
   status                 CardFundTransactionStatus @default(PENDING)
   createdAt              DateTime                  @default(now()) @map("created_at")
 

@@ -16,7 +16,7 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const key = status.toLowerCase();
+  const key = (status ?? 'none').toLowerCase();
   return (
     <span
       className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${styles[key] ?? styles.none}`}>

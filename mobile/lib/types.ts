@@ -209,6 +209,7 @@ export type CardFundTransactionSummary = {
   gmdEstimateBefore: number;
   gmdEstimateAfter: number;
   stripeCredited: boolean;
+  direction?: 'fund' | 'unload';
   status: string;
   createdAt: string;
 };

@@ -64,6 +64,7 @@ function toAdminCardFundTx(tx: {
   gmdEstimateAfter: number;
   stripeCredited: boolean;
   stripeTransferId: string | null;
+  direction?: string;
   status: string;
   createdAt: Date;
 }) {
@@ -82,6 +83,7 @@ function toAdminCardFundTx(tx: {
     gmdEstimateAfter: tx.gmdEstimateAfter,
     stripeCredited: tx.stripeCredited,
     stripeTransferId: tx.stripeTransferId,
+    direction: String(tx.direction ?? 'FUND').toLowerCase(),
     status: tx.status.toLowerCase(),
     createdAt: tx.createdAt.toISOString(),
   };

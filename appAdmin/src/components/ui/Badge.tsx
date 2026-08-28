@@ -16,6 +16,7 @@ const variants: Record<string, string> = {
   inactive: 'bg-[#f6f9fc] text-[var(--color-text-muted)] border-[var(--color-border)]',
   deposit: 'bg-[#e8f4fd] text-[#0055bc] border-[#b8d9f5]',
   card_fund: 'bg-[#f3e8ff] text-[#6b21a8] border-[#e9d5ff]',
+  card_unload: 'bg-[#e8f4fd] text-[#0055bc] border-[#b8d9f5]',
   card_issuance: 'bg-[#fef6e8] text-[#9a6700] border-[#f5e6c4]',
   adjustment: 'bg-[#f6f9fc] text-[var(--color-text-muted)] border-[var(--color-border)]',
   sent: 'bg-[var(--color-accent-soft)] text-[var(--color-accent)] border-[#a7f3d0]',
@@ -23,12 +24,12 @@ const variants: Record<string, string> = {
 };
 
 type BadgeProps = {
-  status: string;
+  status?: string | null;
   dot?: boolean;
 };
 
 export function Badge({ status, dot }: BadgeProps) {
-  const key = status.toLowerCase().replace(/\s+/g, '_');
+  const key = (status ?? 'none').toLowerCase().replace(/\s+/g, '_');
   const style = variants[key] ?? variants.none;
 
   return (

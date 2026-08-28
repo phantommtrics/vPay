@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
-import { fetchCards, updateCardStatus } from '@/lib/api';
+import { fetchCards, updateCardStatus, deleteCard } from '@/lib/api';
 import type { CardsResponse, VirtualCardSummary } from '@/lib/types';
 
 type UseCardsResult = {
@@ -17,6 +17,10 @@ type UseCardsResult = {
   refresh: () => Promise<void>;
   freezeCard: (cardId: string) => Promise<void>;
   unfreezeCard: (cardId: string) => Promise<void>;
+  deleteCard: (cardId: string) => Promise<{
+    balanceMovedGmd: number;
+    balanceMovedUsd: number;
+  }>;
   updatingCardId: string | null;
 };
 
@@ -92,6 +96,20 @@ export function useCards(enabled = true): UseCardsResult {
     }
   }, []);
 
+  const removeCard = useCallback(async (cardId: string) => {
+    setUpdatingCardId(cardId);
+    try {
+      const result = await deleteCard(cardId);
+      setCards((current) => current.map((card) => (card.id === cardId ? result.card : card)));
+      return {
+        balanceMovedGmd: result.balanceMovedGmd,
+        balanceMovedUsd: result.balanceMovedUsd,
+      };
+    } finally {
+      setUpdatingCardId(null);
+    }
+  }, []);
+
   return {
     cards,
     primaryCard: cards.find((card) => card.status !== 'canceled') ?? null,
@@ -105,6 +123,7 @@ export function useCards(enabled = true): UseCardsResult {
     refresh,
     freezeCard,
     unfreezeCard,
+    deleteCard: removeCard,
     updatingCardId,
   };
 }

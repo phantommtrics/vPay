@@ -158,6 +158,7 @@ import {
 import { attachUserDevice } from './middleware/device.js';
 import {
   handleCreateEphemeralKey,
+  handleDeleteCard,
   handleGetCard,
   handleListCards,
   handleUpdateCardStatus,
@@ -166,6 +167,7 @@ import {
   handleFundCard,
   handleGetCardFundBalance,
   handleListCardFundTransactions,
+  handleUnloadCard,
 } from './routes/card-fund.js';
 import {
   handleGetCardIssuanceConfig,
@@ -275,6 +277,7 @@ app.get('/api/wallet', requireAuth, handleGetWallet);
 app.get('/api/wallet/transactions', requireAuth, handleListWalletTransactions);
 
 app.get('/api/card-fund/balance', requireAuth, handleGetCardFundBalance);
+app.post('/api/card-fund/unload', requireAuth, attachUserDevice, handleUnloadCard);
 app.post('/api/card-fund', requireAuth, attachUserDevice, handleFundCard);
 app.get('/api/card-fund/transactions', requireAuth, handleListCardFundTransactions);
 
@@ -285,6 +288,7 @@ app.get('/api/cards', requireAuth, handleListCards);
 app.get('/api/cards/:id', requireAuth, handleGetCard);
 app.post('/api/cards/:id/ephemeral-key', requireAuth, handleCreateEphemeralKey);
 app.patch('/api/cards/:id', requireAuth, handleUpdateCardStatus);
+app.delete('/api/cards/:id', requireAuth, attachUserDevice, handleDeleteCard);
 
 app.get('/api/issuing-elements', handleIssuingElementsPage);
 app.get('/issuing-elements', handleIssuingElementsPage);

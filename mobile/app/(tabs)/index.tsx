@@ -16,9 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CardBalanceRow } from '@/components/CardBalanceRow';
+import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { TransactionRow } from '@/components/TransactionRow';
-import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCardActivity } from '@/hooks/useCardActivity';
 import { useCards } from '@/hooks/useCards';
@@ -187,6 +188,7 @@ export default function HomeScreen() {
             stripePublishableKey={stripePublishableKey}
             stripeConnectedAccountId={stripeConnectedAccountId}
           />
+          <CardBalanceRow balanceUsd={primaryCard.balanceUsd} />
           {primaryCard.expired && showIssueCardCta ? (
             <View style={styles.reissuePanel}>
               <Text style={styles.reissueBody}>

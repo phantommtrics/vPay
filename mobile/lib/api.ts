@@ -278,6 +278,18 @@ export async function fundCardFromWallet(amountGmd: number): Promise<{
   });
 }
 
+export async function unloadCardToWallet(amountGmd: number): Promise<{
+  ok: boolean;
+  transaction: CardFundTransactionSummary;
+  card: { balanceUsd: number; balanceGmdEstimate: number; balanceSource: string };
+  wallet: WalletSummary;
+}> {
+  return request('/api/card-fund/unload', {
+    method: 'POST',
+    body: JSON.stringify({ amountGmd }),
+  });
+}
+
 export async function getCardFundTransactions(params?: {
   cursor?: string;
   limit?: number;
@@ -306,6 +318,16 @@ export async function updateCardStatus(
     body: JSON.stringify({ status }),
   });
   return data.card;
+}
+
+export async function deleteCard(cardId: string): Promise<{
+  ok: boolean;
+  card: VirtualCardSummary;
+  wallet: WalletSummary | null;
+  balanceMovedGmd: number;
+  balanceMovedUsd: number;
+}> {
+  return request(`/api/cards/${cardId}`, { method: 'DELETE' });
 }
 
 export async function createEphemeralKey(

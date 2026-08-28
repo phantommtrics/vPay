@@ -1,16 +1,17 @@
 import {
   ArrowRight,
   CheckCircle2,
+  CreditCard,
   Plus,
-  Settings2,
-  ShieldAlert,
   Snowflake,
   Trash2,
+  Wallet,
   XCircle,
 } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -20,12 +21,13 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
+import { CardBalanceRow } from '@/components/CardBalanceRow';
 import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
+import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCards } from '@/hooks/useCards';
 import { useWallet } from '@/hooks/useWallet';
-import { ApiError, fundCardFromWallet, getFundConfig, payCardIssuance } from '@/lib/api';
+import { ApiError, fundCardFromWallet, getFundConfig, payCardIssuance, unloadCardToWallet } from '@/lib/api';
 import { formatCardBalance, formatGmd } from '@/lib/currency';
 import {
   estimateWalletTopupFee,
@@ -50,6 +52,7 @@ export default function CardsScreen() {
     error,
     freezeCard,
     unfreezeCard,
+    deleteCard,
     updatingCardId,
     refresh,
   } = useCards(Boolean(user?.kycComplete));
@@ -71,8 +74,14 @@ export default function CardsScreen() {
   const [fundError, setFundError] = useState('');
   const [fundSuccess, setFundSuccess] = useState<{ gmd: number; usd: number } | null>(null);
   const [showFundPanel, setShowFundPanel] = useState(false);
+  const [showWithdrawPanel, setShowWithdrawPanel] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState('');
+  const [withdrawSuccess, setWithdrawSuccess] = useState<{ gmd: number; usd: number } | null>(null);
   const [isReissuing, setIsReissuing] = useState(false);
   const [reissueError, setReissueError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   const numFundAmount = parseFloat(fundAmount) || 0;
   const cardFundFee: WalletTopupFeePricing | undefined =
@@ -86,6 +95,14 @@ export default function CardsScreen() {
     : '—';
   const fundUsdEstimate =
     exchangeRate && numFundAmount > 0 ? numFundAmount / exchangeRate : undefined;
+
+  const numWithdrawAmount = parseFloat(withdrawAmount) || 0;
+  const withdrawUsdEstimate =
+    exchangeRate && numWithdrawAmount > 0 ? numWithdrawAmount / exchangeRate : undefined;
+  const cardBalanceUsd = primaryCard?.balanceUsd ?? 0;
+  const withdrawExceedsCard =
+    withdrawUsdEstimate !== undefined &&
+    Math.round(withdrawUsdEstimate * 100) > Math.round(cardBalanceUsd * 100);
 
   useEffect(() => {
     getFundConfig()
@@ -125,6 +142,39 @@ export default function CardsScreen() {
     await freezeCard(primaryCard.id);
   };
 
+  const confirmDeleteCard = useCallback(async () => {
+    if (!primaryCard) return;
+    setDeleteError('');
+    try {
+      const result = await deleteCard(primaryCard.id);
+      await Promise.all([refresh(), refreshWallet()]);
+      if (result.balanceMovedGmd > 0) {
+        Alert.alert(
+          'Card deleted',
+          `${formatGmd(result.balanceMovedGmd)} (≈ $${result.balanceMovedUsd.toFixed(2)}) was moved to your wallet.`,
+        );
+      }
+    } catch (e) {
+      const raw = e instanceof ApiError ? e.message : 'Could not delete your card';
+      setDeleteError(toFriendlyFundError(raw));
+    }
+  }, [primaryCard, deleteCard, refresh, refreshWallet]);
+
+  const promptDeleteCard = () => {
+    if (!primaryCard) return;
+    const hasBalance = Math.round(primaryCard.balanceUsd * 100) >= 1;
+    Alert.alert(
+      'Delete card?',
+      hasBalance
+        ? `Remaining ${formatCardBalance(primaryCard.balanceUsd, 'usd')} will be moved to your vPay wallet. This cannot be undone.`
+        : 'This cannot be undone. You can issue a new card later.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void confirmDeleteCard() },
+      ],
+    );
+  };
+
   const handleFundCard = useCallback(async () => {
     if (numFundAmount <= 0 || isFunding || !primaryCard) return;
 
@@ -159,6 +209,39 @@ export default function CardsScreen() {
     }
   }, [numFundAmount, fundTotalGmd, fundFeeGmd, isFunding, primaryCard, wallet, refresh, refreshWallet]);
 
+  const handleWithdrawToWallet = useCallback(async () => {
+    if (numWithdrawAmount <= 0 || isWithdrawing || !primaryCard) return;
+
+    if (withdrawExceedsCard) {
+      setWithdrawError('Your card does not have enough balance.');
+      return;
+    }
+
+    setWithdrawError('');
+    setIsWithdrawing(true);
+    try {
+      const result = await unloadCardToWallet(numWithdrawAmount);
+      await Promise.all([refresh(), refreshWallet()]);
+      setWithdrawAmount('');
+      setWithdrawSuccess({
+        gmd: result.transaction.amountGmd,
+        usd: result.transaction.amountUsd,
+      });
+    } catch (e) {
+      const raw = e instanceof ApiError ? e.message : 'Could not withdraw from your card';
+      setWithdrawError(toFriendlyFundError(raw));
+    } finally {
+      setIsWithdrawing(false);
+    }
+  }, [
+    numWithdrawAmount,
+    isWithdrawing,
+    primaryCard,
+    withdrawExceedsCard,
+    refresh,
+    refreshWallet,
+  ]);
+
   if (fundSuccess) {
     return (
       <View style={[styles.successContainer, { paddingTop: insets.top + spacing.xl }]}>
@@ -183,6 +266,31 @@ export default function CardsScreen() {
     );
   }
 
+  if (withdrawSuccess) {
+    return (
+      <View style={[styles.successContainer, { paddingTop: insets.top + spacing.xl }]}>
+        <View style={styles.successIcon}>
+          <CheckCircle2 size={40} color={colors.emerald600} />
+        </View>
+        <Text style={styles.successTitle}>Moved to wallet</Text>
+        <Text style={styles.successBody}>
+          <Text style={styles.successAmount}>${withdrawSuccess.usd.toFixed(2)}</Text> moved from
+          your card to your wallet (
+          <Text style={styles.successAmount}>{formatGmd(withdrawSuccess.gmd)}</Text>).
+        </Text>
+        <Pressable
+          style={styles.doneButton}
+          onPress={() => {
+            setWithdrawSuccess(null);
+            setWithdrawError('');
+            setShowWithdrawPanel(false);
+          }}>
+          <Text style={styles.doneButtonText}>Done</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <PullToRefreshScrollView
       style={styles.container}
@@ -194,24 +302,9 @@ export default function CardsScreen() {
       keyboardShouldPersistTaps="handled"
       refreshing={refreshing}
       onRefresh={onRefresh}>
-      <View style={styles.headerRow}>
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Your Cards</Text>
-          <Text style={styles.subtitle}>Manage your virtual cards</Text>
-        </View>
-        {primaryCard && !isExpired ? (
-          <Pressable
-            style={styles.fundCardButton}
-            onPress={() => {
-              setShowFundPanel((open) => !open);
-              setFundError('');
-            }}
-            hitSlop={8}>
-            <Text style={styles.fundCardButtonText}>
-              {showFundPanel ? 'Close' : 'Fund card'}
-            </Text>
-          </Pressable>
-        ) : null}
+      <View>
+        <Text style={styles.title}>Your Cards</Text>
+        <Text style={styles.subtitle}>Manage your virtual cards</Text>
       </View>
 
       {loading ? (
@@ -219,7 +312,7 @@ export default function CardsScreen() {
           <ActivityIndicator color={colors.emerald600} />
         </View>
       ) : primaryCard ? (
-        <View>
+        <View style={styles.cardBlock}>
           <ExpandableVirtualCard
             card={primaryCard}
             stripePublishableKey={stripePublishableKey}
@@ -228,6 +321,7 @@ export default function CardsScreen() {
           <View style={styles.dots}>
             <View style={[styles.dot, styles.dotActive]} />
           </View>
+          <CardBalanceRow balanceUsd={primaryCard.balanceUsd} />
         </View>
       ) : (
         <Pressable style={styles.emptyCard} onPress={() => void refresh()}>
@@ -329,6 +423,87 @@ export default function CardsScreen() {
         </View>
       ) : null}
 
+      {primaryCard && showWithdrawPanel ? (
+        <View style={styles.fundSection}>
+          <Text style={styles.fundSectionTitle}>Withdraw to wallet</Text>
+          <Text style={styles.fundSectionHint}>
+            Move funds from your card back to your vPay wallet.
+          </Text>
+
+          <View style={styles.balanceRow}>
+            <View style={styles.balanceChip}>
+              <Text style={styles.balanceChipLabel}>Card balance</Text>
+              <Text style={styles.balanceChipValue}>
+                {formatCardBalance(primaryCard.balanceUsd, 'usd')}
+              </Text>
+            </View>
+            <View style={styles.balanceChip}>
+              <Text style={styles.balanceChipLabel}>Wallet available</Text>
+              <Text style={styles.balanceChipValue}>
+                {wallet ? formatGmd(wallet.balanceGmd) : '—'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.amountCard}>
+            <Text style={styles.amountLabel}>Amount (GMD)</Text>
+            <View style={styles.amountInputRow}>
+              <Text
+                style={[
+                  styles.currencySymbol,
+                  numWithdrawAmount > 0 && styles.currencySymbolActive,
+                ]}>
+                D
+              </Text>
+              <TextInput
+                value={withdrawAmount}
+                onChangeText={(v) => {
+                  setWithdrawAmount(v.replace(/[^0-9.]/g, ''));
+                  setWithdrawError('');
+                }}
+                keyboardType="decimal-pad"
+                style={[styles.amountInput, !withdrawAmount && styles.amountInputPlaceholder]}
+                placeholder="0"
+                placeholderTextColor={colors.gray300}
+                editable={!isWithdrawing}
+              />
+            </View>
+            <Text style={styles.amountHint}>
+              Available on card: {formatCardBalance(primaryCard.balanceUsd, 'usd')}
+              {withdrawUsdEstimate !== undefined && numWithdrawAmount > 0
+                ? ` · ≈ $${withdrawUsdEstimate.toFixed(2)} USD from card`
+                : ''}
+              {withdrawExceedsCard ? ' · exceeds card balance' : ''}
+            </Text>
+          </View>
+
+          {withdrawError ? (
+            <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
+              <XCircle size={18} color={colors.red500} />
+              <Text style={styles.errorText}>{withdrawError}</Text>
+            </Animated.View>
+          ) : null}
+
+          <Pressable
+            style={[
+              styles.fundButton,
+              (numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard) &&
+                styles.fundButtonDisabled,
+            ]}
+            onPress={() => void handleWithdrawToWallet()}
+            disabled={numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard}>
+            {isWithdrawing ? (
+              <ActivityIndicator color={colors.white} />
+            ) : (
+              <>
+                <Text style={styles.fundButtonText}>Withdraw</Text>
+                <ArrowRight size={20} color={colors.white} />
+              </>
+            )}
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.controls}>
         <ControlButton
           icon={Snowflake}
@@ -339,18 +514,28 @@ export default function CardsScreen() {
           disabled={!primaryCard || isExpired || updatingCardId === primaryCard?.id}
         />
         <ControlButton
-          icon={Settings2}
-          label="Limits"
-          iconBg={colors.gray100}
-          iconColor={colors.gray600}
-          disabled
+          icon={CreditCard}
+          label="Fund card"
+          iconBg={showFundPanel ? colors.emerald200 : colors.emerald50}
+          iconColor={colors.emerald600}
+          onPress={() => {
+            setShowFundPanel((open) => !open);
+            setShowWithdrawPanel(false);
+            setFundError('');
+          }}
+          disabled={!primaryCard || isExpired}
         />
         <ControlButton
-          icon={ShieldAlert}
-          label="Security"
-          iconBg={colors.gray100}
-          iconColor={colors.gray600}
-          disabled
+          icon={Wallet}
+          label="Withdraw"
+          iconBg={showWithdrawPanel ? colors.emerald200 : colors.emerald50}
+          iconColor={colors.emerald600}
+          onPress={() => {
+            setShowWithdrawPanel((open) => !open);
+            setShowFundPanel(false);
+            setWithdrawError('');
+          }}
+          disabled={!primaryCard}
         />
         <ControlButton
           icon={Trash2}
@@ -358,7 +543,8 @@ export default function CardsScreen() {
           iconBg={colors.red50}
           iconColor={colors.red500}
           labelColor={colors.red500}
-          disabled
+          onPress={promptDeleteCard}
+          disabled={!primaryCard || updatingCardId === primaryCard?.id}
         />
       </View>
 
@@ -379,6 +565,7 @@ export default function CardsScreen() {
       </Pressable>
 
       {reissueError ? <Text style={styles.reissueError}>{reissueError}</Text> : null}
+      {deleteError ? <Text style={styles.reissueError}>{deleteError}</Text> : null}
 
       <Text style={styles.feeNote}>
         {canReissue
@@ -428,28 +615,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     gap: 24,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  headerText: {
-    flex: 1,
-  },
-  fundCardButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: radius.md,
-    backgroundColor: colors.emerald100,
-    marginTop: 4,
-  },
-  fundCardButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.emerald700,
-    fontFamily: 'Inter_600SemiBold',
-  },
   title: {
     fontSize: 24,
     fontWeight: '700',
@@ -491,11 +656,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontFamily: 'Inter_400Regular',
   },
+  cardBlock: {
+    gap: 16,
+  },
   dots: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 6,
-    marginTop: 16,
   },
   dot: {
     width: 6,

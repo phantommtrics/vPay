@@ -50,8 +50,11 @@ function walletDepositSubtitle(tx: WalletTransactionSummary): string | undefined
 function walletTxToEntry(tx: WalletTransactionSummary): HistoryItem {
   const isDeposit = tx.type === 'deposit';
   const isCardFund = tx.type === 'card_fund';
+  const isCardUnload = tx.type === 'card_unload';
   const isCredit =
-    isDeposit || (tx.type === 'adjustment' && tx.balanceAfterGmd > tx.balanceBeforeGmd);
+    isDeposit ||
+    isCardUnload ||
+    (tx.type === 'adjustment' && tx.balanceAfterGmd > tx.balanceBeforeGmd);
 
   let title = 'Wallet adjustment';
   if (isDeposit) {
@@ -60,6 +63,8 @@ function walletTxToEntry(tx: WalletTransactionSummary): HistoryItem {
       : 'Wallet top-up';
   } else if (isCardFund) {
     title = 'Transferred to card';
+  } else if (isCardUnload) {
+    title = 'Withdrawn from card';
   } else if (tx.referenceType === 'card_fund_reversal') {
     title = 'Card funding refund';
   } else if (tx.description) {
@@ -78,9 +83,11 @@ function walletTxToEntry(tx: WalletTransactionSummary): HistoryItem {
     title,
     subtitle: isCardFund
       ? 'Debited from your vPay wallet'
-      : isDeposit
-        ? walletDepositSubtitle(tx)
-        : reversalSubtitle,
+      : isCardUnload
+        ? 'Added to your vPay wallet'
+        : isDeposit
+          ? walletDepositSubtitle(tx)
+          : reversalSubtitle,
     date: formatTxDate(tx.createdAt),
     amountLabel: formatSignedGmd(tx.amountGmd, isCredit),
     amountTone: isCredit ? 'credit' : 'debit',
@@ -95,18 +102,29 @@ function walletTxToEntry(tx: WalletTransactionSummary): HistoryItem {
 
 function cardFundTxToEntry(tx: CardFundTransactionSummary): HistoryItem {
   const failed = tx.status === 'failed';
+  const isUnload = tx.direction === 'unload';
 
   return {
     id: tx.id,
     category: 'card',
     createdAt: tx.createdAt,
-    title: failed ? 'Card funding failed' : 'Card funded from wallet',
+    title: failed
+      ? isUnload
+        ? 'Card withdrawal failed'
+        : 'Card funding failed'
+      : isUnload
+        ? 'Withdrawn to wallet'
+        : 'Card funded from wallet',
     subtitle: failed
-      ? 'Your wallet was refunded'
-      : `${formatUsd(tx.amountUsd)} added to your card`,
+      ? isUnload
+        ? 'No funds were moved'
+        : 'Your wallet was refunded'
+      : isUnload
+        ? `${formatUsd(tx.amountUsd)} moved to your wallet`
+        : `${formatUsd(tx.amountUsd)} added to your card`,
     date: formatTxDate(tx.createdAt),
-    amountLabel: formatSignedGmd(tx.amountGmd, false),
-    amountTone: 'debit',
+    amountLabel: formatSignedGmd(tx.amountGmd, isUnload),
+    amountTone: isUnload ? 'credit' : 'debit',
     balanceLines: [
       {
         label: 'Card balance (USD)',

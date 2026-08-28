@@ -4,7 +4,7 @@ import { prisma } from '../db.js';
 import { isFundSimulationEnabled } from '../fund-config.js';
 import { log } from '../logger.js';
 import { creditStripeFinancialAccount } from './dev-inbound-payment.js';
-import { fundConnectedAccountUsdc } from './outbound-payments.js';
+import { fundConnectedAccountUsdc, unloadConnectedAccountUsdc } from './outbound-payments.js';
 import { isStablecoinIssuingEnabled } from './client.js';
 
 export type CardBalanceSource = 'stripe' | 'simulated' | 'unavailable';
@@ -136,5 +136,124 @@ export async function getCardBalanceUsdForUser(user: User): Promise<{
     ...resolved,
     stripeBalanceUsd: stripeResult.balanceUsd,
     simulatedBalanceUsd: user.simulatedBalanceUsd,
+  };
+}
+
+export class InsufficientCardBalanceError extends Error {
+  constructor() {
+    super('Insufficient card balance');
+    this.name = 'InsufficientCardBalanceError';
+  }
+}
+
+function toUsdCents(amountUsd: number): number {
+  return Math.round(amountUsd * 100);
+}
+
+/**
+ * Debits the user's card spendable balance via Stripe when possible.
+ * In dev simulation mode, falls back to users.simulated_balance_usd when Stripe has no balance.
+ */
+export async function debitCardBalanceUsd(
+  user: User,
+  usdAmount: number,
+): Promise<{
+  debited: boolean;
+  stripeDebited: boolean;
+  simulatedBalanceUsd: number;
+  balanceSource: CardBalanceSource | 'failed';
+}> {
+  if (usdAmount <= 0) {
+    throw new Error('Invalid withdrawal amount');
+  }
+
+  const cents = Math.max(toUsdCents(usdAmount), 1);
+  const debitAmountUsd = cents / 100;
+  const current = await getCardBalanceUsdForUser(user);
+
+  if (toUsdCents(current.balanceUsd) < cents) {
+    throw new InsufficientCardBalanceError();
+  }
+
+  const stripeDebitUsd = Math.min(current.stripeBalanceUsd, debitAmountUsd);
+  const simulatedDebitUsd = Math.round((debitAmountUsd - stripeDebitUsd) * 100) / 100;
+
+  let stripeDebited = false;
+  if (stripeDebitUsd > 0) {
+    try {
+      const outbound = await unloadConnectedAccountUsdc(user, stripeDebitUsd);
+      stripeDebited = outbound.debited;
+    } catch (e) {
+      log('Card unload: Stripe debit threw', {
+        userId: user.id,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
+    if (!stripeDebited) {
+      log('Card unload: Stripe debit failed', {
+        userId: user.id,
+        usdAmount: stripeDebitUsd,
+        connectedAccountId: user.stripeConnectedAccountId,
+        financialAccountId: user.stripeFinancialAccountId,
+      });
+      return {
+        debited: false,
+        stripeDebited: false,
+        simulatedBalanceUsd: current.simulatedBalanceUsd,
+        balanceSource: 'failed',
+      };
+    }
+  }
+
+  if (simulatedDebitUsd > 0) {
+    if (!isFundSimulationEnabled()) {
+      return {
+        debited: false,
+        stripeDebited,
+        simulatedBalanceUsd: current.simulatedBalanceUsd,
+        balanceSource: 'failed',
+      };
+    }
+
+    const latest = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { simulatedBalanceUsd: true },
+    });
+    const simulatedBalanceUsd = latest?.simulatedBalanceUsd ?? user.simulatedBalanceUsd;
+    if (toUsdCents(simulatedBalanceUsd) < toUsdCents(simulatedDebitUsd)) {
+      throw new InsufficientCardBalanceError();
+    }
+
+    const result = await prisma.user.update({
+      where: { id: user.id },
+      data: { simulatedBalanceUsd: { decrement: simulatedDebitUsd } },
+      select: { simulatedBalanceUsd: true },
+    });
+
+    log('Card unload: debited simulated balance', {
+      userId: user.id,
+      usdAmount: simulatedDebitUsd,
+      simulatedBalanceUsd: result.simulatedBalanceUsd,
+    });
+
+    return {
+      debited: true,
+      stripeDebited,
+      simulatedBalanceUsd: result.simulatedBalanceUsd,
+      balanceSource: stripeDebited ? 'stripe' : 'simulated',
+    };
+  }
+
+  const refreshed = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { simulatedBalanceUsd: true },
+  });
+
+  return {
+    debited: true,
+    stripeDebited,
+    simulatedBalanceUsd: refreshed?.simulatedBalanceUsd ?? user.simulatedBalanceUsd,
+    balanceSource: stripeDebited ? 'stripe' : current.balanceSource,
   };
 }

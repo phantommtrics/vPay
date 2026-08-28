@@ -1,12 +1,12 @@
 import crypto from 'node:crypto';
 import type { Response } from 'express';
-import { CardFundTransactionStatus, StripeProvisioningStatus } from '@prisma/client';
+import { CardFundDirection, CardFundTransactionStatus, StripeProvisioningStatus } from '@prisma/client';
 import { z } from 'zod';
 
+import { CardUnloadError, unloadCardBalanceToWallet } from '../card-fund/service.js';
 import { prisma } from '../db.js';
 import { postCardFundJournal } from '../journal/service.js';
 import { getFundConfigAsync } from '../fund-config.js';
-import { log } from '../logger.js';
 import { calculateCardFundFee } from '../settlement/platform-config.js';
 import { creditCardBalanceUsd, getCardBalanceUsdForUser } from '../stripe/card-balance.js';
 import {
@@ -35,6 +35,7 @@ function toPublicCardFundTransaction(tx: {
   gmdEstimateBefore: number;
   gmdEstimateAfter: number;
   stripeCredited: boolean;
+  direction?: CardFundDirection;
   status: CardFundTransactionStatus;
   createdAt: Date;
 }) {
@@ -50,6 +51,7 @@ function toPublicCardFundTransaction(tx: {
     gmdEstimateBefore: tx.gmdEstimateBefore,
     gmdEstimateAfter: tx.gmdEstimateAfter,
     stripeCredited: tx.stripeCredited,
+    direction: (tx.direction ?? CardFundDirection.FUND).toLowerCase(),
     status: tx.status.toLowerCase(),
     createdAt: tx.createdAt.toISOString(),
   };
@@ -238,6 +240,65 @@ export async function handleFundCard(req: DeviceAuthedRequest, res: Response): P
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : 'Card funding failed';
     console.error('[POST /api/card-fund]', msg);
+    res.status(500).json({ error: msg });
+  }
+}
+
+/** Reverse of card funding: debit card USD, credit vPay wallet GMD. */
+export async function handleUnloadCard(req: DeviceAuthedRequest, res: Response): Promise<void> {
+  try {
+    const parsed = fundCardSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.errors[0]?.message ?? 'Invalid request' });
+      return;
+    }
+
+    const userId = req.userId!;
+    const amountGmd = parsed.data.amountGmd;
+
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      res.status(404).json({ error: 'User not found' });
+      return;
+    }
+    if (!user.kycComplete) {
+      res.status(403).json({ error: 'KYC must be approved before withdrawing from your card.' });
+      return;
+    }
+    if (user.stripeProvisioningStatus !== StripeProvisioningStatus.ACTIVE) {
+      res.status(409).json({ error: 'Your virtual card is not ready yet.' });
+      return;
+    }
+
+    const { exchangeRate } = await getFundConfigAsync();
+    const amountUsd = amountGmd / exchangeRate;
+
+    const result = await unloadCardBalanceToWallet({
+      user,
+      amountGmd,
+      amountUsd,
+      deviceId: req.deviceId,
+    });
+
+    const after = await getCardBalanceUsdForUser(user);
+
+    res.json({
+      ok: true,
+      transaction: toPublicCardFundTransaction(result.transaction),
+      card: {
+        balanceUsd: after.balanceUsd,
+        balanceGmdEstimate: after.balanceUsd * exchangeRate,
+        balanceSource: after.balanceSource,
+      },
+      wallet: await getWalletBalance(userId),
+    });
+  } catch (e: unknown) {
+    if (e instanceof CardUnloadError) {
+      res.status(e.status).json({ error: e.message });
+      return;
+    }
+    const msg = e instanceof Error ? e.message : 'Card withdrawal failed';
+    console.error('[POST /api/card-fund/unload]', msg);
     res.status(500).json({ error: msg });
   }
 }

@@ -1,6 +1,10 @@
 const FUND_ERROR_RULES: Array<{ test: RegExp; message: string }> = [
   {
-    test: /insufficient balance/i,
+    test: /card does not have enough balance/i,
+    message: 'Your card does not have enough balance for this withdrawal.',
+  },
+  {
+    test: /insufficient balance|wallet does not have enough balance/i,
     message: 'Your wallet does not have enough balance for this payment.',
   },
   {

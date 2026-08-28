@@ -2,7 +2,7 @@
   "expo": {
     "name": "vPay",
     "slug": "vpay",
-    "version": "1.0.6",
+    "version": "1.0.8",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "vpay",
@@ -19,7 +19,7 @@
     },
     "android": {
       "package": "gm.phantommetrics.vpay",
-      "versionCode": 9,
+      "versionCode": 11,
       "permissions": [
         "android.permission.USE_BIOMETRIC",
         "android.permission.USE_FINGERPRINT",

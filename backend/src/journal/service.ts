@@ -466,6 +466,69 @@ export async function postCardFundJournal(params: {
   });
 }
 
+export async function postCardUnloadJournal(params: {
+  walletId: string;
+  walletTransactionId: string;
+  cardFundTransactionId: string;
+  amountGmd: number;
+  productCode?: ProductCode;
+  metadata?: Prisma.InputJsonValue;
+}): Promise<JournalEntry | null> {
+  if (params.amountGmd <= 0) return null;
+
+  const productCode = params.productCode ?? PRODUCT_CODES.CARD_FUND;
+  const [clearingId, fundPoolId] = await Promise.all([
+    resolveCardFundingClearingAccountId(),
+    resolveFundHoldingAccount(productCode),
+  ]);
+
+  if (!clearingId) {
+    log('Card funding clearing account not configured; skipping card unload journal', {
+      cardFundTransactionId: params.cardFundTransactionId,
+    });
+    return null;
+  }
+
+  if (!fundPoolId) {
+    log('Fund holding account not configured; skipping card unload journal', {
+      cardFundTransactionId: params.cardFundTransactionId,
+    });
+    return null;
+  }
+
+  return postJournalEntry({
+    referenceType: 'card_unload_transaction',
+    referenceId: params.cardFundTransactionId,
+    description: 'Card withdrawal to wallet',
+    metadata: params.metadata,
+    lines: [
+      {
+        accountType: JournalAccountType.CUSTOMER_WALLET,
+        accountId: params.walletId,
+        credit: params.amountGmd,
+        walletTransactionId: params.walletTransactionId,
+        productCode,
+        description: 'Customer wallet credit',
+        auditOnly: true,
+      },
+      {
+        accountType: JournalAccountType.BUSINESS_ACCOUNT,
+        accountId: clearingId,
+        debit: params.amountGmd,
+        productCode,
+        description: 'Card funding clearing reversal',
+      },
+      {
+        accountType: JournalAccountType.BUSINESS_ACCOUNT,
+        accountId: fundPoolId,
+        credit: params.amountGmd,
+        productCode,
+        description: 'Customer funds pool credit',
+      },
+    ],
+  });
+}
+
 /**
  * Admin account termination: remove remaining customer liability from the funds
  * pool and recognize it on the terminated-balances income account.

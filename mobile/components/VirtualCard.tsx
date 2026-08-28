@@ -13,7 +13,6 @@ import { CardBrandMark } from '@/components/CardBrandMark';
 import { CardRevealWebView } from '@/components/CardRevealWebView';
 import { VPayWordmark } from '@/components/VPayWordmark';
 import { colors, radius } from '@/constants/theme';
-import { formatCardBalance, formatMaskedCardBalance } from '@/lib/currency';
 import type { VirtualCardSummary } from '@/lib/types';
 
 const CARD_DETAILS_HEIGHT = 124;
@@ -37,7 +36,7 @@ export function VirtualCard({
   stripeConnectedAccountId,
   style,
 }: VirtualCardProps) {
-  const [revealed, setRevealed] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const isFrozen = card.status === 'inactive';
   const isExpired = card.expired;
@@ -80,27 +79,13 @@ export function VirtualCard({
 
         <View style={styles.content}>
           <View style={styles.topRow}>
-            <View style={styles.balanceBlock}>
-              <Text style={styles.balanceLabel}>Available Balance</Text>
-              <Text
-                style={styles.balanceValue}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.75}>
-                {revealed
-                  ? formatCardBalance(card.balanceUsd, 'usd')
-                  : formatMaskedCardBalance('usd')}
-              </Text>
-            </View>
+            <VPayWordmark variant="dark" width={96} height={31} />
             <CardBrandMark brand={card.brand} size={32} />
           </View>
 
           <View style={styles.bottomSection}>
-            {!revealed ? (
+            {!showDetails ? (
               <>
-                <View style={styles.brandMarkRow}>
-                  <VPayWordmark variant="dark" width={96} height={31} />
-                </View>
                 <View style={styles.numberRow}>
                   <Text
                     style={styles.cardNumber}
@@ -110,10 +95,12 @@ export function VirtualCard({
                     {maskedNumber}
                   </Text>
                   <Pressable
-                    onPress={() => setRevealed(true)}
+                    onPress={() => setShowDetails(true)}
                     style={styles.iconButton}
                     hitSlop={8}
-                    disabled={!canReveal || isExpired}>
+                    disabled={!canReveal || isExpired}
+                    accessibilityRole="button"
+                    accessibilityLabel="Show card details">
                     <Eye size={18} color={colors.white} />
                   </Pressable>
                 </View>
@@ -144,7 +131,7 @@ export function VirtualCard({
             ) : (
               <View style={styles.revealedPane}>
                 <CardRevealWebView
-                  active={revealed}
+                  active={showDetails}
                   card={card}
                   publishableKey={stripePublishableKey}
                   stripeConnectedAccountId={stripeConnectedAccountId}
@@ -152,9 +139,11 @@ export function VirtualCard({
                   expiry={expiry}
                 />
                 <Pressable
-                  onPress={() => setRevealed(false)}
+                  onPress={() => setShowDetails(false)}
                   style={styles.revealEyeButton}
-                  hitSlop={8}>
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Hide card details">
                   <EyeOff size={18} color={colors.white} />
                 </Pressable>
               </View>
@@ -237,26 +226,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     gap: 12,
-  },
-  balanceBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-  brandMarkRow: {
-    alignSelf: 'flex-start',
-  },
-  balanceLabel: {
-    color: 'rgba(167,243,208,0.8)',
-    fontSize: 11,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 4,
-  },
-  balanceValue: {
-    color: colors.white,
-    fontSize: 24,
-    fontWeight: '700',
   },
   bottomSection: {
     height: CARD_DETAILS_HEIGHT,

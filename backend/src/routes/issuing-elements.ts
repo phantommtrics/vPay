@@ -2,16 +2,6 @@ import type { Request, Response } from 'express';
 
 import { getStripePublishableKey } from '../stripe/client.js';
 
-function vpayWordmarkSvg(width = 96, height = 31): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 220 72" role="img" aria-label="VPay Africa" style="display:block;background:transparent;">
-  <text font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="46" font-weight="700" letter-spacing="-1.5">
-    <tspan x="4" y="46" fill="#4A80E8">V</tspan><tspan fill="#FFFFFF">Pay</tspan>
-  </text>
-  <text x="5" y="64" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="12" font-weight="500" letter-spacing="5.5" fill="#8A95A8">AFRICA</text>
-  <rect x="4" y="68" width="52" height="2" rx="1" fill="#E8A020"/>
-</svg>`;
-}
-
 export function handleIssuingElementsPage(req: Request, res: Response): void {
   const publishableKey = getStripePublishableKey() ?? '';
   const layout = typeof req.query.layout === 'string' ? req.query.layout : 'full';
@@ -45,11 +35,6 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
     #root.card-layout {
       justify-content: flex-end;
       gap: 8px;
-    }
-    .vpay-wordmark {
-      flex-shrink: 0;
-      line-height: 0;
-      background: transparent;
     }
     .label {
       font-family: Inter, system-ui, sans-serif;
@@ -119,7 +104,6 @@ export function handleIssuingElementsPage(req: Request, res: Response): void {
 </head>
 <body>
   <div id="root" class="${isCardLayout ? 'card-layout' : ''}">
-    ${isCardLayout ? `<div class="vpay-wordmark">${vpayWordmarkSvg()}</div>` : ''}
     ${isCardLayout ? '' : '<div><div class="label">Card number</div>'}
     <div id="number-mount" class="number-row"></div>
     ${isCardLayout ? '' : '</div>'}

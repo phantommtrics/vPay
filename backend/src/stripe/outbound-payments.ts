@@ -74,3 +74,75 @@ export async function fundConnectedAccountUsdc(
     return { credited: false };
   }
 }
+
+/**
+ * Moves USD/USDC from a connected account financial account back to the platform.
+ * Reverse of fundConnectedAccountUsdc.
+ */
+export async function unloadConnectedAccountUsdc(
+  user: User,
+  usdAmount: number,
+): Promise<{ debited: boolean; outboundPaymentId?: string }> {
+  const platformFinancialAccountId = getPlatformFinancialAccountId();
+  const connectedAccountId = user.stripeConnectedAccountId;
+  const connectedFinancialAccountId = user.stripeFinancialAccountId;
+
+  if (
+    !platformFinancialAccountId ||
+    !connectedAccountId ||
+    connectedAccountId.startsWith('platform:') ||
+    !connectedFinancialAccountId ||
+    connectedFinancialAccountId === 'platform'
+  ) {
+    return { debited: false };
+  }
+
+  const cents = Math.round(usdAmount * 100);
+  if (cents < 1) {
+    return { debited: false };
+  }
+
+  for (const fromCurrency of ['usdc', 'usd'] as const) {
+    try {
+      const payment = await stripeV2Request<OutboundPaymentV2>(
+        'POST',
+        '/v2/money_management/outbound_payments',
+        {
+          from: {
+            financial_account: connectedFinancialAccountId,
+            currency: fromCurrency,
+          },
+          to: {
+            financial_account: platformFinancialAccountId,
+            currency: 'usd',
+          },
+          amount: {
+            value: cents,
+            currency: fromCurrency,
+          },
+          description: `vPay card withdrawal for user ${user.id}`,
+        },
+        { stripeAccount: connectedAccountId },
+      );
+
+      log('Stablecoin inbound return created', {
+        userId: user.id,
+        outboundPaymentId: payment.id,
+        status: payment.status,
+        usdAmount,
+        fromCurrency,
+      });
+
+      return { debited: true, outboundPaymentId: payment.id };
+    } catch (e) {
+      log('Card unload outbound payment failed', {
+        userId: user.id,
+        usdAmount,
+        fromCurrency,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+  }
+
+  return { debited: false };
+}

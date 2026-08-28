@@ -234,7 +234,7 @@ export function UsersPage() {
                       </td>
                       <td className="text-[var(--color-text-muted)]">{user.email}</td>
                       <td>
-                        <Badge status={user.accountStatus} dot />
+                        <Badge status={user.accountStatus ?? 'active'} dot />
                       </td>
                       <td>
                         <Badge status={user.kycStatus} dot />

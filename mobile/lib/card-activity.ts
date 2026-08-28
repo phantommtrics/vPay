@@ -15,14 +15,21 @@ function formatActivityDate(iso: string): string {
 
 export function cardFundTxToRecentActivity(tx: CardFundTransactionSummary): Transaction {
   const failed = tx.status === 'failed';
+  const isUnload = tx.direction === 'unload';
 
   return {
     id: tx.id,
-    merchant: failed ? 'Card funding failed' : 'Card funded from wallet',
-    amount: failed ? -tx.amountUsd : tx.amountUsd,
+    merchant: failed
+      ? isUnload
+        ? 'Withdrawal failed'
+        : 'Card funding failed'
+      : isUnload
+        ? 'Moved to wallet'
+        : 'Card funded from wallet',
+    amount: isUnload ? -tx.amountUsd : failed ? -tx.amountUsd : tx.amountUsd,
     date: formatActivityDate(tx.createdAt),
     type: 'funding',
     status: failed ? 'failed' : 'completed',
-    icon: failed ? '↩️' : '💳',
+    icon: isUnload ? 'wallet' : 'card',
   };
 }

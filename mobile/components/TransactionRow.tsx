@@ -1,22 +1,37 @@
+import { CreditCard, Wallet } from 'lucide-react-native';
+import { StyleSheet, Text, View } from 'react-native';
+
 import { formatAmount, type Transaction } from '@/lib/data';
 import { colors, radius } from '@/constants/theme';
-import { StyleSheet, Text, View } from 'react-native';
 
 type TransactionRowProps = {
   transaction: Transaction;
   large?: boolean;
 };
 
+const LUCIDE_ROW_ICONS = {
+  wallet: Wallet,
+  card: CreditCard,
+} as const;
+
 export function TransactionRow({ transaction, large }: TransactionRowProps) {
   const isCredit = transaction.amount > 0;
+  const LucideIcon =
+    transaction.icon in LUCIDE_ROW_ICONS
+      ? LUCIDE_ROW_ICONS[transaction.icon as keyof typeof LUCIDE_ROW_ICONS]
+      : null;
 
   return (
     <View style={styles.row}>
       <View style={styles.left}>
         <View style={[styles.iconWrap, large && styles.iconWrapLarge]}>
-          <Text style={[styles.icon, large && styles.iconLarge]}>
-            {transaction.icon}
-          </Text>
+          {LucideIcon ? (
+            <LucideIcon size={large ? 22 : 18} color={colors.gray600} strokeWidth={2} />
+          ) : (
+            <Text style={[styles.icon, large && styles.iconLarge]}>
+              {transaction.icon}
+            </Text>
+          )}
         </View>
         <View>
           <Text style={styles.merchant}>{transaction.merchant}</Text>
