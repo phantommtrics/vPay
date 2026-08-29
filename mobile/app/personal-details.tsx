@@ -370,6 +370,12 @@ export default function PersonalDetailsScreen() {
 
             {step.key === 'contact' ? (
               <View style={styles.form}>
+                <View style={styles.field}>
+                  <Text style={styles.label}>Email</Text>
+                  <View style={[styles.input, styles.inputReadonly]}>
+                    <Text style={styles.readonlyValue}>{user.email}</Text>
+                  </View>
+                </View>
                 <FormField label="Phone number" value={phone} onChangeText={setPhone} placeholder="+220 712 3456" keyboardType="phone-pad" autoFocus />
                 <DateOfBirthPicker value={dateOfBirth} onChange={setDateOfBirth} />
               </View>
@@ -434,6 +440,7 @@ export default function PersonalDetailsScreen() {
 
             {step.key === 'review' ? (
               <View style={styles.reviewCard}>
+                <ReviewRow label="Email" value={user.email} />
                 <ReviewRow label="Name" value={`${firstName} ${lastName}`} />
                 <ReviewRow label="Phone" value={phone} />
                 <ReviewRow label="Date of birth" value={dateOfBirth} />
@@ -540,16 +547,17 @@ function KycLockedView({
                 ? 'Identity verified'
                 : 'Details locked'}
           </Text>
-          <Text style={styles.statusBody}>
-            {pending
-              ? 'We are reviewing your submission. You cannot make changes until we complete our review.'
-              : approved
-                ? 'Your identity has been approved. Personal details and documents can no longer be edited.'
+          {pending || !approved ? (
+            <Text style={styles.statusBody}>
+              {pending
+                ? 'We are reviewing your submission. You cannot make changes until we complete our review.'
                 : 'Your details are currently locked.'}
-          </Text>
+            </Text>
+          ) : null}
         </View>
 
         <View style={styles.reviewCard}>
+          <ReviewRow label="Email" value={user.email || '—'} />
           <ReviewRow label="Name" value={`${user.firstName ?? ''} ${user.lastName ?? ''}`.trim()} />
           <ReviewRow label="Phone" value={user.phone ?? '—'} />
           <ReviewRow label="Date of birth" value={user.dateOfBirth ?? '—'} />
@@ -744,6 +752,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.gray900,
     fontFamily: 'Inter_400Regular',
+  },
+  inputReadonly: {
+    backgroundColor: colors.gray50,
+    justifyContent: 'center',
+  },
+  readonlyValue: {
+    fontSize: 16,
+    color: colors.gray700,
+    fontFamily: 'Inter_500Medium',
   },
   reviewCard: {
     backgroundColor: colors.white,

@@ -41,6 +41,7 @@ export default function HomeScreen() {
     refreshing: cardsRefreshing,
     error: cardsError,
     refresh,
+    waitingForCard,
   } = useCards(Boolean(user?.kycComplete));
   const {
     transactions: cardActivity,
@@ -141,16 +142,16 @@ export default function HomeScreen() {
         </Pressable>
       ) : null}
 
-      {user.kycComplete && provisioning.status === 'pending' && !hasActiveCard ? (
-        <Pressable style={styles.provisioningBanner} onPress={() => void refresh()}>
+      {user.kycComplete && waitingForCard ? (
+        <View style={styles.provisioningBanner}>
           <ActivityIndicator color={colors.emerald600} />
           <View style={styles.verifyContent}>
             <Text style={styles.provisioningTitle}>Your card is being issued</Text>
             <Text style={styles.verifyBody}>
-              This usually takes a moment after approval. Tap to refresh.
+              This usually takes a moment. Your card will appear here when it is ready.
             </Text>
           </View>
-        </Pressable>
+        </View>
       ) : null}
 
       {user.kycComplete && provisioning.status === 'failed' ? (
@@ -210,6 +211,10 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           ) : null}
+        </View>
+      ) : user.kycComplete && waitingForCard ? (
+        <View style={styles.cardLoading}>
+          <ActivityIndicator color={colors.emerald600} />
         </View>
       ) : user.kycComplete ? (
         <View style={styles.emptyCard}>

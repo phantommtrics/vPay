@@ -155,6 +155,11 @@ import {
   handleVerifyOtp,
   requireAuth,
 } from './routes/auth.js';
+import {
+  handleClearAppLock,
+  handleSetAppLock,
+  handleVerifyAppLock,
+} from './routes/app-lock.js';
 import { attachUserDevice } from './middleware/device.js';
 import {
   handleCreateEphemeralKey,
@@ -196,6 +201,7 @@ import {
 import { handleDirectPayWebhook } from './routes/directpay-webhook.js';
 import { handleGetWallet, handleListWalletTransactions } from './routes/wallet.js';
 import { handleStripeWebhook } from './routes/webhooks.js';
+import { handleCreateSupportTicket, handleGetSupportTicket, handleListSupportTickets } from './routes/support.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -261,6 +267,9 @@ app.post('/api/auth/register-device', requireAuth, handleRegisterDevice);
 app.patch('/api/auth/device-lock', requireAuth, handleUpdateDeviceLock);
 app.patch('/api/auth/profile', requireAuth, handleUpdateProfile);
 app.delete('/api/auth/account', requireAuth, handleDeleteAccount);
+app.put('/api/app-lock', requireAuth, handleSetAppLock);
+app.delete('/api/app-lock', requireAuth, handleClearAppLock);
+app.post('/api/app-lock/verify', requireAuth, handleVerifyAppLock);
 
 app.post('/api/kyc/upload', requireAuth, handleKycUpload, handleUploadDocument);
 app.post('/api/kyc/submit', requireAuth, attachUserDevice, handleSubmitKyc);
@@ -275,6 +284,10 @@ app.get('/api/fund/:id', requireAuth, handleGetFundingOrder);
 
 app.get('/api/wallet', requireAuth, handleGetWallet);
 app.get('/api/wallet/transactions', requireAuth, handleListWalletTransactions);
+
+app.get('/api/support/tickets', requireAuth, handleListSupportTickets);
+app.post('/api/support/tickets', requireAuth, handleCreateSupportTicket);
+app.get('/api/support/tickets/:id', requireAuth, handleGetSupportTicket);
 
 app.get('/api/card-fund/balance', requireAuth, handleGetCardFundBalance);
 app.post('/api/card-fund/unload', requireAuth, attachUserDevice, handleUnloadCard);

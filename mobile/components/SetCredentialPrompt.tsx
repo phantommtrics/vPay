@@ -5,7 +5,6 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { getAppLockCredentialInfo } from '@/lib/app-lock-credential';
 import {
   clearPendingCredentialPrompt,
   hasPendingCredentialPrompt,
@@ -29,19 +28,12 @@ export function SetCredentialPrompt() {
 
     async function maybeShow() {
       try {
-        const info = await getAppLockCredentialInfo();
-        if (cancelled) return;
-
         clearPendingCredentialPrompt();
-
-        // Only prompt when no app PIN/password has been set yet.
-        if (!info) {
+        if (!user.appLockType) {
           setVisible(true);
         }
       } catch {
-        if (!cancelled) {
-          clearPendingCredentialPrompt();
-        }
+        clearPendingCredentialPrompt();
       }
     }
 

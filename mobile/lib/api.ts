@@ -14,6 +14,10 @@ import type {
   FundingOrderSummary,
   KycSubmitPayload,
   ProfileUpdate,
+  SupportKind,
+  SupportTicketSummary,
+  SupportTicketsResponse,
+  SupportTopicKey,
   User,
   VirtualCardSummary,
   WalletSummary,
@@ -125,6 +129,32 @@ export async function updateDeviceLock(
 export async function fetchMe(): Promise<User> {
   const data = await request<{ user: User }>('/api/auth/me');
   return data.user;
+}
+
+export async function setAppLockCredentialRemote(
+  type: 'pin' | 'password',
+  secret: string,
+  currentSecret?: string,
+): Promise<{ ok: true; type: 'pin' | 'password' }> {
+  return request('/api/app-lock', {
+    method: 'PUT',
+    body: JSON.stringify({
+      type,
+      secret,
+      ...(currentSecret ? { currentSecret } : {}),
+    }),
+  });
+}
+
+export async function clearAppLockCredentialRemote(): Promise<{ ok: true }> {
+  return request('/api/app-lock', { method: 'DELETE' });
+}
+
+export async function verifyAppLockCredentialRemote(secret: string): Promise<{ ok: true }> {
+  return request('/api/app-lock/verify', {
+    method: 'POST',
+    body: JSON.stringify({ secret }),
+  });
 }
 
 export async function updateProfile(fields: ProfileUpdate): Promise<User> {
@@ -307,6 +337,26 @@ export async function payCardIssuance(): Promise<CardIssuancePayResponse> {
 
 export async function getFundingOrder(fundingId: string): Promise<{ funding: FundingOrderSummary }> {
   return request(`/api/fund/${fundingId}`);
+}
+
+export async function listSupportTickets(): Promise<SupportTicketsResponse> {
+  return request('/api/support/tickets');
+}
+
+export async function getSupportTicket(ticketId: string): Promise<{ ticket: SupportTicketSummary }> {
+  return request(`/api/support/tickets/${ticketId}`);
+}
+
+export async function createSupportTicket(body: {
+  topic: SupportTopicKey;
+  summary: string;
+  message: string;
+  kind: SupportKind;
+}): Promise<{ ticket: SupportTicketSummary }> {
+  return request('/api/support/tickets', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
 }
 
 export async function updateCardStatus(

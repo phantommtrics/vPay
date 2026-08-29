@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import {
   AlertCircle,
-  Bell,
   CheckCircle2,
   ChevronRight,
   Clock,
@@ -48,7 +47,11 @@ export default function ProfileScreen() {
       showsVerticalScrollIndicator={false}>
       <Text style={styles.title}>Profile</Text>
 
-      <View style={styles.userCard}>
+      <Pressable
+        style={styles.userCard}
+        onPress={() => router.push('/personal-details')}
+        accessibilityRole="button"
+        accessibilityLabel="Open personal details">
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
@@ -57,7 +60,7 @@ export default function ProfileScreen() {
           <Text style={styles.userPhone}>{user.phone ?? user.email}</Text>
         </View>
         <ChevronRight size={20} color={colors.gray400} />
-      </View>
+      </Pressable>
 
       {user.kycStatus === 'approved' ? (
         <View style={styles.kycBanner}>
@@ -123,16 +126,11 @@ export default function ProfileScreen() {
           onPress={() => router.push('/security')}
         />
         <SettingsRow
-          icon={Bell}
-          label="Notifications"
-          iconBg={colors.orange50}
-          iconColor={colors.orange600}
-        />
-        <SettingsRow
           icon={HelpCircle}
           label="Help & Support"
           iconBg={colors.purple50}
           iconColor={colors.purple600}
+          onPress={() => router.push('/help-support')}
         />
         <SettingsRow
           icon={FileText}

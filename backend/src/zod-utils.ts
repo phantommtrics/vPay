@@ -20,6 +20,9 @@ const FIELD_LABELS: Record<string, string> = {
   osVersion: 'OS version',
   appVersion: 'App version',
   hardwareId: 'Device ID',
+  topic: 'Topic',
+  summary: 'Subject',
+  message: 'Message',
 };
 
 function formatFieldLabel(path: (string | number)[]): string {

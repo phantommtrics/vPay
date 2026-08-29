@@ -134,6 +134,10 @@ async function applyTermination(
         phoneE164: null,
         deviceLockEnabled: false,
         lockedDeviceId: null,
+        appLockType: null,
+        appLockSecretHash: null,
+        appLockFailedAttempts: 0,
+        appLockLockedUntil: null,
       },
     });
   });

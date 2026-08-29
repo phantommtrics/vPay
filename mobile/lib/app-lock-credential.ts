@@ -1,5 +1,13 @@
 import * as SecureStore from 'expo-secure-store';
 
+import {
+  ApiError,
+  clearAppLockCredentialRemote,
+  setAppLockCredentialRemote,
+  verifyAppLockCredentialRemote,
+} from '@/lib/api';
+import { clearCredentialReauth, getCurrentSecret } from '@/lib/credential-setup';
+
 const CREDENTIAL_KEY = 'vpay_app_lock_credential';
 
 export type AppLockCredentialType = 'pin' | 'password';
@@ -9,7 +17,6 @@ export const PASSWORD_MIN_LENGTH = 8;
 
 type StoredCredential = {
   type: AppLockCredentialType;
-  /** Stored in SecureStore (OS keychain / keystore encryption). */
   secret: string;
 };
 
@@ -45,16 +52,41 @@ export function validateCredential(type: AppLockCredentialType, value: string): 
   return type === 'pin' ? validatePin(value) : validatePassword(value);
 }
 
-export async function getAppLockCredentialInfo(): Promise<AppLockCredentialInfo | null> {
+async function readLocalCredential(): Promise<StoredCredential | null> {
   const raw = await SecureStore.getItemAsync(CREDENTIAL_KEY);
   if (!raw) return null;
 
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!isStoredCredential(parsed)) return null;
-    return { type: parsed.type };
+    return parsed;
   } catch {
     return null;
+  }
+}
+
+export async function clearLocalAppLockCredential(): Promise<void> {
+  await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
+}
+
+/** Upload a leftover on-device PIN/password once, then delete the local copy. */
+export async function migrateLocalAppLockCredential(
+  serverType: AppLockCredentialType | null | undefined,
+): Promise<boolean> {
+  const local = await readLocalCredential();
+  if (!local) return false;
+
+  if (serverType) {
+    await clearLocalAppLockCredential();
+    return false;
+  }
+
+  try {
+    await setAppLockCredentialRemote(local.type, local.secret);
+    await clearLocalAppLockCredential();
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -67,23 +99,24 @@ export async function setAppLockCredential(
     throw new Error(validationError);
   }
 
-  const payload: StoredCredential = { type, secret };
-  await SecureStore.setItemAsync(CREDENTIAL_KEY, JSON.stringify(payload));
+  await setAppLockCredentialRemote(type, secret, getCurrentSecret());
+  await clearLocalAppLockCredential();
+  clearCredentialReauth();
 }
 
 export async function clearAppLockCredential(): Promise<void> {
-  await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
+  await clearAppLockCredentialRemote();
+  await clearLocalAppLockCredential();
 }
 
 export async function verifyAppLockCredential(secret: string): Promise<boolean> {
-  const raw = await SecureStore.getItemAsync(CREDENTIAL_KEY);
-  if (!raw) return false;
-
   try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isStoredCredential(parsed)) return false;
-    return parsed.secret === secret;
-  } catch {
+    await verifyAppLockCredentialRemote(secret);
+    return true;
+  } catch (error) {
+    if (error instanceof ApiError && (error.status === 429 || error.status === 0)) {
+      throw error;
+    }
     return false;
   }
 }

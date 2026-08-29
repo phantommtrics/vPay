@@ -16,6 +16,7 @@ import {
   getUserMonthlyDeviceUsage,
   isDeviceLockActiveOnDevice,
 } from './device/limits.js';
+import { toPublicAppLockType } from './app-lock/types.js';
 import { getFundConfigAsync } from './fund-config.js';
 import { log, logMissingPersonalDetails } from './logger.js';
 import {
@@ -60,6 +61,7 @@ export type PublicUser = {
   deviceLockEnabled: boolean;
   monthlyDevicesUsed: number;
   monthlyDevicesLimit: number;
+  appLockType: 'pin' | 'password' | null;
 };
 
 export type PublicUserSession = PublicUser & {
@@ -186,6 +188,7 @@ export async function toPublicUser(user: User): Promise<PublicUser> {
     deviceLockEnabled: user.deviceLockEnabled,
     monthlyDevicesUsed: monthlyUsage.used,
     monthlyDevicesLimit: monthlyUsage.limit,
+    appLockType: toPublicAppLockType(user.appLockType),
   };
 }
 

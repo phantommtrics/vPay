@@ -151,6 +151,11 @@ enum KycReviewAction {
   REJECTED
 }
 
+enum AppLockCredentialType {
+  PIN
+  PASSWORD
+}
+
 model User {
   id                       String                   @id @default(uuid())
   email                    String                   @unique
@@ -200,6 +205,10 @@ model User {
   adminTotpEnabledAt       DateTime?                @map("admin_totp_enabled_at")
   deviceLockEnabled        Boolean                  @default(false) @map("device_lock_enabled")
   lockedDeviceId           String?                  @map("locked_device_id")
+  appLockType              AppLockCredentialType?   @map("app_lock_type")
+  appLockSecretHash        String?                  @map("app_lock_secret_hash")
+  appLockFailedAttempts    Int                      @default(0) @map("app_lock_failed_attempts")
+  appLockLockedUntil       DateTime?                @map("app_lock_locked_until")
   createdAt                DateTime                 @default(now()) @map("created_at")
   updatedAt                DateTime                 @updatedAt @map("updated_at")
 
@@ -217,6 +226,7 @@ model User {
   lockedDevice           UserDevice?              @relation("LockedDevice", fields: [lockedDeviceId], references: [id], onDelete: SetNull)
   monthlyDevices         UserMonthlyDevice[]
   emailNotifications     EmailNotification[]
+  supportTickets         SupportTicket[]
 
   @@index([accountStatus])
   @@map("users")
@@ -765,6 +775,25 @@ model ExchangeRateSnapshot {
   @@index([status, requestedAt])
   @@index([targetCurrency, requestedAt])
   @@map("exchange_rate_snapshots")
+}
+
+model SupportTicket {
+  id           String   @id @default(uuid())
+  userId       String   @map("user_id")
+  ticketingId  String   @unique @map("ticketing_id")
+  ticketingRef String   @map("ticketing_ref")
+  topic        String
+  summary      String
+  message      String   @db.Text
+  kind         String   @default("question")
+  status       String
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("support_tickets")
 }
 
 model EmailNotification {

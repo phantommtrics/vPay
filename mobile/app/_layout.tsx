@@ -66,7 +66,43 @@ export default function RootLayout() {
                     options={{ presentation: 'card', animation: 'slide_from_right' }}
                   />
                   <Stack.Screen
+                    name="verify-credential"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="set-pin"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="confirm-pin"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="set-password"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="confirm-password"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
                     name="delete-account"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="help-support"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="send-request"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="my-tickets"
+                    options={{ presentation: 'card', animation: 'slide_from_right' }}
+                  />
+                  <Stack.Screen
+                    name="ticket/[id]"
                     options={{ presentation: 'card', animation: 'slide_from_right' }}
                   />
                   <Stack.Screen

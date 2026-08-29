@@ -21,6 +21,7 @@ import {
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { CardBalanceRow } from '@/components/CardBalanceRow';
 import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
@@ -55,6 +56,7 @@ export default function CardsScreen() {
     deleteCard,
     updatingCardId,
     refresh,
+    waitingForCard,
   } = useCards(Boolean(user?.kycComplete));
   const { wallet, refreshing: walletRefreshing, refresh: refreshWallet } = useWallet(
     Boolean(user?.kycComplete),
@@ -75,12 +77,15 @@ export default function CardsScreen() {
   const [fundSuccess, setFundSuccess] = useState<{ gmd: number; usd: number } | null>(null);
   const [showFundPanel, setShowFundPanel] = useState(false);
   const [showWithdrawPanel, setShowWithdrawPanel] = useState(false);
+  const [showFreezePanel, setShowFreezePanel] = useState(false);
+  const [showDeletePanel, setShowDeletePanel] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
   const [withdrawSuccess, setWithdrawSuccess] = useState<{ gmd: number; usd: number } | null>(null);
   const [isReissuing, setIsReissuing] = useState(false);
   const [reissueError, setReissueError] = useState('');
+  const [freezeError, setFreezeError] = useState('');
   const [deleteError, setDeleteError] = useState('');
 
   const numFundAmount = parseFloat(fundAmount) || 0;
@@ -133,20 +138,31 @@ export default function CardsScreen() {
     }
   }, [refresh]);
 
-  const handleFreezeToggle = async () => {
-    if (!primaryCard) return;
-    if (isFrozen) {
-      await unfreezeCard(primaryCard.id);
-      return;
+  const isUpdatingCard = Boolean(primaryCard && updatingCardId === primaryCard.id);
+
+  const handleConfirmFreeze = async () => {
+    if (!primaryCard || isUpdatingCard) return;
+    setFreezeError('');
+    try {
+      if (isFrozen) {
+        await unfreezeCard(primaryCard.id);
+      } else {
+        await freezeCard(primaryCard.id);
+      }
+      setShowFreezePanel(false);
+    } catch (e) {
+      const raw =
+        e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Could not update your card';
+      setFreezeError(raw);
     }
-    await freezeCard(primaryCard.id);
   };
 
   const confirmDeleteCard = useCallback(async () => {
-    if (!primaryCard) return;
+    if (!primaryCard || updatingCardId === primaryCard.id) return;
     setDeleteError('');
     try {
       const result = await deleteCard(primaryCard.id);
+      setShowDeletePanel(false);
       await Promise.all([refresh(), refreshWallet()]);
       if (result.balanceMovedGmd > 0) {
         Alert.alert(
@@ -158,22 +174,7 @@ export default function CardsScreen() {
       const raw = e instanceof ApiError ? e.message : 'Could not delete your card';
       setDeleteError(toFriendlyFundError(raw));
     }
-  }, [primaryCard, deleteCard, refresh, refreshWallet]);
-
-  const promptDeleteCard = () => {
-    if (!primaryCard) return;
-    const hasBalance = Math.round(primaryCard.balanceUsd * 100) >= 1;
-    Alert.alert(
-      'Delete card?',
-      hasBalance
-        ? `Remaining ${formatCardBalance(primaryCard.balanceUsd, 'usd')} will be moved to your vPay wallet. This cannot be undone.`
-        : 'This cannot be undone. You can issue a new card later.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => void confirmDeleteCard() },
-      ],
-    );
-  };
+  }, [primaryCard, deleteCard, refresh, refreshWallet, updatingCardId]);
 
   const handleFundCard = useCallback(async () => {
     if (numFundAmount <= 0 || isFunding || !primaryCard) return;
@@ -292,7 +293,8 @@ export default function CardsScreen() {
   }
 
   return (
-    <PullToRefreshScrollView
+    <>
+      <PullToRefreshScrollView
       style={styles.container}
       contentContainerStyle={[
         styles.content,
@@ -323,195 +325,43 @@ export default function CardsScreen() {
           </View>
           <CardBalanceRow balanceUsd={primaryCard.balanceUsd} />
         </View>
+      ) : waitingForCard ? (
+        <View style={styles.emptyCard}>
+          <ActivityIndicator color={colors.emerald600} />
+          <Text style={styles.emptyTitle}>Issuing your card</Text>
+          <Text style={styles.emptyBody}>
+            This usually takes a moment. Your card will appear here when it is ready.
+          </Text>
+        </View>
       ) : (
-        <Pressable style={styles.emptyCard} onPress={() => void refresh()}>
+        <View style={styles.emptyCard}>
           <Text style={styles.emptyTitle}>No card available</Text>
           <Text style={styles.emptyBody}>
-            {error ?? 'Complete verification and wait for card provisioning. Tap to refresh.'}
+            {error ?? 'Complete verification to get a virtual card.'}
           </Text>
-        </Pressable>
+        </View>
       )}
-
-      {primaryCard && !isExpired && showFundPanel ? (
-        <View style={styles.fundSection}>
-          <Text style={styles.fundSectionTitle}>Fund card</Text>
-          <Text style={styles.fundSectionHint}>
-            Move GMD from your vPay wallet to your card balance.
-          </Text>
-
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceChip}>
-              <Text style={styles.balanceChipLabel}>Card balance</Text>
-              <Text style={styles.balanceChipValue}>
-                {formatCardBalance(primaryCard.balanceUsd, 'usd')}
-              </Text>
-            </View>
-            <View style={styles.balanceChip}>
-              <Text style={styles.balanceChipLabel}>Wallet available</Text>
-              <Text style={styles.balanceChipValue}>
-                {wallet ? formatGmd(wallet.balanceGmd) : '—'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.amountCard}>
-            <Text style={styles.amountLabel}>Amount (GMD)</Text>
-            <View style={styles.amountInputRow}>
-              <Text
-                style={[
-                  styles.currencySymbol,
-                  numFundAmount > 0 && styles.currencySymbolActive,
-                ]}>
-                D
-              </Text>
-              <TextInput
-                value={fundAmount}
-                onChangeText={(v) => {
-                  setFundAmount(v.replace(/[^0-9.]/g, ''));
-                  setFundError('');
-                }}
-                keyboardType="decimal-pad"
-                style={[styles.amountInput, !fundAmount && styles.amountInputPlaceholder]}
-                placeholder="0"
-                placeholderTextColor={colors.gray300}
-                editable={!isFunding && Boolean(wallet)}
-              />
-            </View>
-            {wallet ? (
-              <Text style={styles.amountHint}>
-                Available: {formatGmd(wallet.balanceGmd)}
-                {fundUsdEstimate !== undefined && numFundAmount > 0
-                  ? ` · ≈ $${fundUsdEstimate.toFixed(2)} USD to card`
-                  : ''}
-                {fundFeeGmd > 0 && numFundAmount > 0
-                  ? ` · Fee ${fundFeeLabel} (${formatGmd(fundFeeGmd)})`
-                  : ''}
-                {fundTotalGmd > 0 && fundFeeGmd > 0
-                  ? ` · Total ${formatGmd(fundTotalGmd)}`
-                  : ''}
-              </Text>
-            ) : (
-              <Text style={styles.amountHint}>
-                Top up your wallet from the Wallet tab before funding your card.
-              </Text>
-            )}
-          </View>
-
-          {fundError ? (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
-              <XCircle size={18} color={colors.red500} />
-              <Text style={styles.errorText}>{fundError}</Text>
-            </Animated.View>
-          ) : null}
-
-          <Pressable
-            style={[
-              styles.fundButton,
-              (numFundAmount <= 0 || isFunding || !wallet) && styles.fundButtonDisabled,
-            ]}
-            onPress={() => void handleFundCard()}
-            disabled={numFundAmount <= 0 || isFunding || !wallet}>
-            {isFunding ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <>
-                <Text style={styles.fundButtonText}>Fund card</Text>
-                <ArrowRight size={20} color={colors.white} />
-              </>
-            )}
-          </Pressable>
-        </View>
-      ) : null}
-
-      {primaryCard && showWithdrawPanel ? (
-        <View style={styles.fundSection}>
-          <Text style={styles.fundSectionTitle}>Withdraw to wallet</Text>
-          <Text style={styles.fundSectionHint}>
-            Move funds from your card back to your vPay wallet.
-          </Text>
-
-          <View style={styles.balanceRow}>
-            <View style={styles.balanceChip}>
-              <Text style={styles.balanceChipLabel}>Card balance</Text>
-              <Text style={styles.balanceChipValue}>
-                {formatCardBalance(primaryCard.balanceUsd, 'usd')}
-              </Text>
-            </View>
-            <View style={styles.balanceChip}>
-              <Text style={styles.balanceChipLabel}>Wallet available</Text>
-              <Text style={styles.balanceChipValue}>
-                {wallet ? formatGmd(wallet.balanceGmd) : '—'}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.amountCard}>
-            <Text style={styles.amountLabel}>Amount (GMD)</Text>
-            <View style={styles.amountInputRow}>
-              <Text
-                style={[
-                  styles.currencySymbol,
-                  numWithdrawAmount > 0 && styles.currencySymbolActive,
-                ]}>
-                D
-              </Text>
-              <TextInput
-                value={withdrawAmount}
-                onChangeText={(v) => {
-                  setWithdrawAmount(v.replace(/[^0-9.]/g, ''));
-                  setWithdrawError('');
-                }}
-                keyboardType="decimal-pad"
-                style={[styles.amountInput, !withdrawAmount && styles.amountInputPlaceholder]}
-                placeholder="0"
-                placeholderTextColor={colors.gray300}
-                editable={!isWithdrawing}
-              />
-            </View>
-            <Text style={styles.amountHint}>
-              Available on card: {formatCardBalance(primaryCard.balanceUsd, 'usd')}
-              {withdrawUsdEstimate !== undefined && numWithdrawAmount > 0
-                ? ` · ≈ $${withdrawUsdEstimate.toFixed(2)} USD from card`
-                : ''}
-              {withdrawExceedsCard ? ' · exceeds card balance' : ''}
-            </Text>
-          </View>
-
-          {withdrawError ? (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
-              <XCircle size={18} color={colors.red500} />
-              <Text style={styles.errorText}>{withdrawError}</Text>
-            </Animated.View>
-          ) : null}
-
-          <Pressable
-            style={[
-              styles.fundButton,
-              (numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard) &&
-                styles.fundButtonDisabled,
-            ]}
-            onPress={() => void handleWithdrawToWallet()}
-            disabled={numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard}>
-            {isWithdrawing ? (
-              <ActivityIndicator color={colors.white} />
-            ) : (
-              <>
-                <Text style={styles.fundButtonText}>Withdraw</Text>
-                <ArrowRight size={20} color={colors.white} />
-              </>
-            )}
-          </Pressable>
-        </View>
-      ) : null}
 
       <View style={styles.controls}>
         <ControlButton
           icon={Snowflake}
           label={isFrozen ? 'Unfreeze' : 'Freeze'}
-          iconBg={isFrozen ? colors.blue100 : colors.gray100}
+          iconBg={
+            isFrozen
+              ? colors.blue100
+              : showFreezePanel
+                ? colors.gray200
+                : colors.gray100
+          }
           iconColor={isFrozen ? colors.blue600 : colors.gray600}
-          onPress={handleFreezeToggle}
-          disabled={!primaryCard || isExpired || updatingCardId === primaryCard?.id}
+          onPress={() => {
+            setShowFreezePanel((open) => !open);
+            setShowFundPanel(false);
+            setShowWithdrawPanel(false);
+            setShowDeletePanel(false);
+            setFreezeError('');
+          }}
+          disabled={!primaryCard || isExpired}
         />
         <ControlButton
           icon={CreditCard}
@@ -521,6 +371,8 @@ export default function CardsScreen() {
           onPress={() => {
             setShowFundPanel((open) => !open);
             setShowWithdrawPanel(false);
+            setShowFreezePanel(false);
+            setShowDeletePanel(false);
             setFundError('');
           }}
           disabled={!primaryCard || isExpired}
@@ -533,6 +385,8 @@ export default function CardsScreen() {
           onPress={() => {
             setShowWithdrawPanel((open) => !open);
             setShowFundPanel(false);
+            setShowFreezePanel(false);
+            setShowDeletePanel(false);
             setWithdrawError('');
           }}
           disabled={!primaryCard}
@@ -540,11 +394,17 @@ export default function CardsScreen() {
         <ControlButton
           icon={Trash2}
           label="Delete"
-          iconBg={colors.red50}
+          iconBg={showDeletePanel ? '#fecaca' : colors.red50}
           iconColor={colors.red500}
           labelColor={colors.red500}
-          onPress={promptDeleteCard}
-          disabled={!primaryCard || updatingCardId === primaryCard?.id}
+          onPress={() => {
+            setShowDeletePanel((open) => !open);
+            setShowFundPanel(false);
+            setShowWithdrawPanel(false);
+            setShowFreezePanel(false);
+            setDeleteError('');
+          }}
+          disabled={!primaryCard}
         />
       </View>
 
@@ -573,6 +433,269 @@ export default function CardsScreen() {
           : 'Additional cards will be available in a future update.'}
       </Text>
     </PullToRefreshScrollView>
+
+      {primaryCard && !isExpired ? (
+        <BottomSheet
+          visible={showFundPanel}
+          onClose={() => {
+            if (isFunding) return;
+            setShowFundPanel(false);
+          }}
+          dismissible={!isFunding}>
+          <View style={styles.sheetBody}>
+            <Text style={styles.fundSectionTitle}>Fund card</Text>
+            <Text style={styles.fundSectionHint}>
+              Move GMD from your vPay wallet to your card balance.
+            </Text>
+
+            <View style={styles.balanceRow}>
+              <View style={styles.balanceChip}>
+                <Text style={styles.balanceChipLabel}>Card balance</Text>
+                <Text style={styles.balanceChipValue}>
+                  {formatCardBalance(primaryCard.balanceUsd, 'usd')}
+                </Text>
+              </View>
+              <View style={styles.balanceChip}>
+                <Text style={styles.balanceChipLabel}>Wallet available</Text>
+                <Text style={styles.balanceChipValue}>
+                  {wallet ? formatGmd(wallet.balanceGmd) : '—'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.amountCard}>
+              <Text style={styles.amountLabel}>Amount (GMD)</Text>
+              <View style={styles.amountInputRow}>
+                <Text
+                  style={[
+                    styles.currencySymbol,
+                    numFundAmount > 0 && styles.currencySymbolActive,
+                  ]}>
+                  D
+                </Text>
+                <TextInput
+                  value={fundAmount}
+                  onChangeText={(v) => {
+                    setFundAmount(v.replace(/[^0-9.]/g, ''));
+                    setFundError('');
+                  }}
+                  keyboardType="decimal-pad"
+                  style={[styles.amountInput, !fundAmount && styles.amountInputPlaceholder]}
+                  placeholder="0"
+                  placeholderTextColor={colors.gray300}
+                  editable={!isFunding && Boolean(wallet)}
+                />
+              </View>
+              {wallet ? (
+                <Text style={styles.amountHint}>
+                  Available: {formatGmd(wallet.balanceGmd)}
+                  {fundUsdEstimate !== undefined && numFundAmount > 0
+                    ? ` · ≈ $${fundUsdEstimate.toFixed(2)} USD to card`
+                    : ''}
+                  {fundFeeGmd > 0 && numFundAmount > 0
+                    ? ` · Fee ${fundFeeLabel} (${formatGmd(fundFeeGmd)})`
+                    : ''}
+                  {fundTotalGmd > 0 && fundFeeGmd > 0
+                    ? ` · Total ${formatGmd(fundTotalGmd)}`
+                    : ''}
+                </Text>
+              ) : (
+                <Text style={styles.amountHint}>
+                  Top up your wallet from the Wallet tab before funding your card.
+                </Text>
+              )}
+            </View>
+
+            {fundError ? (
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
+                <XCircle size={18} color={colors.red500} />
+                <Text style={styles.errorText}>{fundError}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Pressable
+              style={[
+                styles.fundButton,
+                (numFundAmount <= 0 || isFunding || !wallet) && styles.fundButtonDisabled,
+              ]}
+              onPress={() => void handleFundCard()}
+              disabled={numFundAmount <= 0 || isFunding || !wallet}>
+              {isFunding ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <>
+                  <Text style={styles.fundButtonText}>Fund card</Text>
+                  <ArrowRight size={20} color={colors.white} />
+                </>
+              )}
+            </Pressable>
+          </View>
+        </BottomSheet>
+      ) : null}
+
+      {primaryCard ? (
+        <BottomSheet
+          visible={showWithdrawPanel}
+          onClose={() => {
+            if (isWithdrawing) return;
+            setShowWithdrawPanel(false);
+          }}
+          dismissible={!isWithdrawing}>
+          <View style={styles.sheetBody}>
+            <Text style={styles.fundSectionTitle}>Withdraw to wallet</Text>
+            <Text style={styles.fundSectionHint}>
+              Move funds from your card back to your vPay wallet.
+            </Text>
+
+            <View style={styles.balanceRow}>
+              <View style={styles.balanceChip}>
+                <Text style={styles.balanceChipLabel}>Card balance</Text>
+                <Text style={styles.balanceChipValue}>
+                  {formatCardBalance(primaryCard.balanceUsd, 'usd')}
+                </Text>
+              </View>
+              <View style={styles.balanceChip}>
+                <Text style={styles.balanceChipLabel}>Wallet available</Text>
+                <Text style={styles.balanceChipValue}>
+                  {wallet ? formatGmd(wallet.balanceGmd) : '—'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.amountCard}>
+              <Text style={styles.amountLabel}>Amount (GMD)</Text>
+              <View style={styles.amountInputRow}>
+                <Text
+                  style={[
+                    styles.currencySymbol,
+                    numWithdrawAmount > 0 && styles.currencySymbolActive,
+                  ]}>
+                  D
+                </Text>
+                <TextInput
+                  value={withdrawAmount}
+                  onChangeText={(v) => {
+                    setWithdrawAmount(v.replace(/[^0-9.]/g, ''));
+                    setWithdrawError('');
+                  }}
+                  keyboardType="decimal-pad"
+                  style={[styles.amountInput, !withdrawAmount && styles.amountInputPlaceholder]}
+                  placeholder="0"
+                  placeholderTextColor={colors.gray300}
+                  editable={!isWithdrawing}
+                />
+              </View>
+              <Text style={styles.amountHint}>
+                Available on card: {formatCardBalance(primaryCard.balanceUsd, 'usd')}
+                {withdrawUsdEstimate !== undefined && numWithdrawAmount > 0
+                  ? ` · ≈ $${withdrawUsdEstimate.toFixed(2)} USD from card`
+                  : ''}
+                {withdrawExceedsCard ? ' · exceeds card balance' : ''}
+              </Text>
+            </View>
+
+            {withdrawError ? (
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
+                <XCircle size={18} color={colors.red500} />
+                <Text style={styles.errorText}>{withdrawError}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Pressable
+              style={[
+                styles.fundButton,
+                (numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard) &&
+                  styles.fundButtonDisabled,
+              ]}
+              onPress={() => void handleWithdrawToWallet()}
+              disabled={numWithdrawAmount <= 0 || isWithdrawing || withdrawExceedsCard}>
+              {isWithdrawing ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <>
+                  <Text style={styles.fundButtonText}>Withdraw</Text>
+                  <ArrowRight size={20} color={colors.white} />
+                </>
+              )}
+            </Pressable>
+          </View>
+        </BottomSheet>
+      ) : null}
+
+      {primaryCard && !isExpired ? (
+        <BottomSheet
+          visible={showFreezePanel}
+          onClose={() => {
+            if (isUpdatingCard) return;
+            setShowFreezePanel(false);
+          }}
+          dismissible={!isUpdatingCard}>
+          <View style={styles.sheetBody}>
+            <Text style={styles.fundSectionTitle}>{isFrozen ? 'Unfreeze card' : 'Freeze card'}</Text>
+            <Text style={styles.fundSectionHint}>
+              {isFrozen
+                ? 'Your card is frozen, so new charges are blocked. Unfreeze to use it for payments again.'
+                : 'Freezing pauses your card so merchants cannot charge it. Your balance and details stay the same, and you can unfreeze anytime.'}
+            </Text>
+
+            {freezeError ? (
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
+                <XCircle size={18} color={colors.red500} />
+                <Text style={styles.errorText}>{freezeError}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Pressable
+              style={[styles.fundButton, isUpdatingCard && styles.fundButtonDisabled]}
+              onPress={() => void handleConfirmFreeze()}
+              disabled={isUpdatingCard}>
+              {isUpdatingCard ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.fundButtonText}>{isFrozen ? 'Unfreeze card' : 'Freeze card'}</Text>
+              )}
+            </Pressable>
+          </View>
+        </BottomSheet>
+      ) : null}
+
+      {primaryCard ? (
+        <BottomSheet
+          visible={showDeletePanel}
+          onClose={() => {
+            if (isUpdatingCard) return;
+            setShowDeletePanel(false);
+          }}
+          dismissible={!isUpdatingCard}>
+          <View style={styles.sheetBody}>
+            <Text style={styles.fundSectionTitle}>Delete card?</Text>
+            <Text style={styles.fundSectionHint}>
+              {Math.round(primaryCard.balanceUsd * 100) >= 1
+                ? `Remaining ${formatCardBalance(primaryCard.balanceUsd, 'usd')} will be moved to your vPay wallet. This cannot be undone.`
+                : 'This cannot be undone. You can issue a new card later.'}
+            </Text>
+
+            {deleteError ? (
+              <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
+                <XCircle size={18} color={colors.red500} />
+                <Text style={styles.errorText}>{deleteError}</Text>
+              </Animated.View>
+            ) : null}
+
+            <Pressable
+              style={[styles.deleteButton, isUpdatingCard && styles.fundButtonDisabled]}
+              onPress={() => void confirmDeleteCard()}
+              disabled={isUpdatingCard}>
+              {isUpdatingCard ? (
+                <ActivityIndicator color={colors.white} />
+              ) : (
+                <Text style={styles.fundButtonText}>Delete</Text>
+              )}
+            </Pressable>
+          </View>
+        </BottomSheet>
+      ) : null}
+    </>
   );
 }
 
@@ -674,13 +797,9 @@ const styles = StyleSheet.create({
     width: 16,
     backgroundColor: colors.emerald600,
   },
-  fundSection: {
-    backgroundColor: colors.white,
-    borderRadius: radius.xl,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.gray100,
+  sheetBody: {
     gap: 16,
+    paddingBottom: spacing.sm,
   },
   fundSectionTitle: {
     fontSize: 18,
@@ -794,6 +913,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.white,
     fontFamily: 'Inter_600SemiBold',
+  },
+  deleteButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.red500,
+    borderRadius: radius.lg,
+    paddingVertical: 16,
   },
   controls: {
     flexDirection: 'row',

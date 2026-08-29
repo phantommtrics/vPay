@@ -12,11 +12,12 @@ import { AppState, type AppStateStatus } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   clearAppLockCredential,
-  getAppLockCredentialInfo,
+  migrateLocalAppLockCredential,
   setAppLockCredential,
   verifyAppLockCredential,
   type AppLockCredentialType,
 } from '@/lib/app-lock-credential';
+import { ApiError } from '@/lib/api';
 import {
   consumeSkipNextAppLock,
   getAppLockEnabled,
@@ -52,7 +53,7 @@ type AppLockContextValue = {
 const AppLockContext = createContext<AppLockContextValue | null>(null);
 
 export function AppLockProvider({ children }: { children: React.ReactNode }) {
-  const { user, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading, refreshUser } = useAuth();
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
   const [biometricMethod, setBiometricMethod] = useState<BiometricMethod>('none');
@@ -118,24 +119,20 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     [user, lock],
   );
 
-  const refreshCredential = useCallback(async () => {
-    const info = await getAppLockCredentialInfo();
-    setCredentialType(info?.type ?? null);
-    return info;
-  }, []);
-
   const setCredential = useCallback(
     async (type: AppLockCredentialType, secret: string) => {
       await setAppLockCredential(type, secret);
       setCredentialType(type);
+      await refreshUser();
     },
-    [],
+    [refreshUser],
   );
 
   const clearCredential = useCallback(async () => {
     await clearAppLockCredential();
     setCredentialType(null);
-  }, []);
+    await refreshUser();
+  }, [refreshUser]);
 
   const refreshBiometrics = useCallback(async () => {
     const method = await resolveBiometricMethod();
@@ -197,6 +194,12 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         }
         setIsUnlocked(false);
         return false;
+      } catch (error) {
+        setIsUnlocked(false);
+        if (error instanceof ApiError) {
+          throw error;
+        }
+        return false;
       } finally {
         isAuthenticating.current = false;
         setIsChecking(false);
@@ -210,10 +213,9 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
     async function init() {
       try {
-        const [method, enabled, credential] = await Promise.all([
+        const [method, enabled] = await Promise.all([
           resolveBiometricMethod(),
           getAppLockEnabled(),
-          getAppLockCredentialInfo(),
         ]);
 
         if (cancelled) return;
@@ -221,7 +223,13 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
         setBiometricMethod(method);
         setBiometricsReady(true);
         setAppLockEnabledState(enabled);
-        setCredentialType(credential?.type ?? null);
+        setCredentialType(user?.appLockType ?? null);
+
+        if (user) {
+          void migrateLocalAppLockCredential(user.appLockType).then((migrated) => {
+            if (migrated) void refreshUser();
+          });
+        }
 
         if (!user || authLoading) {
           if (!user) {
@@ -267,7 +275,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading]);
+  }, [user, authLoading, refreshUser]);
 
   useEffect(() => {
     if (!lockRequired || isUnlocked || !biometricsReady || !biometricsAvailable) return;
@@ -300,7 +308,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
       if (nextAppState === 'active') {
         refreshBiometrics();
-        void refreshCredential();
+        void refreshUser();
 
         if (deferLockCount.current > 0) {
           backgroundSince.current = null;
@@ -319,9 +327,10 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     });
 
     return () => subscription.remove();
-  }, [lockRequired, lock, refreshBiometrics, refreshCredential]);
+  }, [lockRequired, lock, refreshBiometrics, refreshUser]);
 
   useEffect(() => {
+    setCredentialType(user?.appLockType ?? null);
     if (!user) {
       setIsUnlocked(true);
       autoPromptCancelled.current = false;

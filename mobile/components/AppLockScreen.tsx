@@ -68,9 +68,14 @@ export function AppLockScreen() {
       if (!value || isChecking) return;
 
       setError('');
-      const ok = await unlockWithCredential(value);
-      if (!ok) {
-        setError(credentialType === 'pin' ? 'Incorrect PIN' : 'Incorrect password');
+      try {
+        const ok = await unlockWithCredential(value);
+        if (!ok) {
+          setError(credentialType === 'pin' ? 'Incorrect PIN' : 'Incorrect password');
+          setSecret('');
+        }
+      } catch (error) {
+        setError(error instanceof Error ? error.message : 'Could not unlock');
         setSecret('');
       }
     },

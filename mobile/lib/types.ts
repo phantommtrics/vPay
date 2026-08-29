@@ -39,6 +39,7 @@ export type User = {
   deviceLockActiveOnThisDevice?: boolean;
   monthlyDevicesUsed: number;
   monthlyDevicesLimit: number;
+  appLockType: 'pin' | 'password' | null;
 };
 
 export type CheckoutWallet = {
@@ -212,4 +213,44 @@ export type CardFundTransactionSummary = {
   direction?: 'fund' | 'unload';
   status: string;
   createdAt: string;
+};
+
+export type SupportTopicKey =
+  | 'account'
+  | 'cards'
+  | 'funding'
+  | 'kyc'
+  | 'transactions'
+  | 'other';
+
+export type SupportKind = 'question' | 'issue';
+
+export type SupportTopic = {
+  key: SupportTopicKey;
+  label: string;
+};
+
+export type SupportTicketComment = {
+  id: string;
+  body: string;
+  authorName: string;
+  createdAt: string;
+};
+
+export type SupportTicketSummary = {
+  id: string;
+  ref: string;
+  topic: SupportTopicKey;
+  summary: string;
+  message: string;
+  kind: SupportKind;
+  status: string;
+  createdAt: string;
+  comments?: SupportTicketComment[];
+};
+
+export type SupportTicketsResponse = {
+  configured: boolean;
+  topics: SupportTopic[];
+  tickets: SupportTicketSummary[];
 };
