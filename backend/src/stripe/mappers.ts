@@ -102,27 +102,96 @@ export function parseDateOfBirth(value: string): ParsedDob {
   throw new Error('Invalid date of birth format. Use DD/MM/YYYY.');
 }
 
+const CALLING_CODES: Record<string, string> = {
+  gm: '220',
+  sn: '221',
+  ng: '234',
+  gh: '233',
+  us: '1',
+  mx: '52',
+  gb: '44',
+};
+
+/**
+ * PURA Phase-1 mobile migration (4 Sep 2026): Africell/QCell/Comium moved from
+ * 7 → 9 national digits by inserting an operator prefix before the old number.
+ * Stripe's GM validation still expects the legacy 7-digit national form.
+ */
+const GM_NINE_DIGIT_OPERATOR_PREFIXES = new Set(['83', '86', '87']);
+
+/**
+ * Normalize a phone to E.164 (+CC…). Accepts local numbers, numbers that already
+ * include the country calling code (with or without +), and variable national lengths
+ * (including Gambia's new 9-digit mobiles).
+ */
 export function normalizePhoneE164(phone: string, countryCode: string): string {
-  const digits = phone.replace(/[^\d+]/g, '');
+  const dialCode = CALLING_CODES[countryCode.toLowerCase()] ?? '220';
+  let digits = phone.replace(/[^\d+]/g, '');
 
   if (digits.startsWith('+')) {
-    return digits;
+    digits = digits.slice(1);
+  }
+  digits = digits.replace(/^0+/, '');
+
+  if (!digits) {
+    throw new Error('Phone number is required');
   }
 
-  const local = digits.replace(/^0+/, '');
+  // Collapse accidental double country codes: 2202207123456 → 2207123456
+  while (digits.startsWith(dialCode + dialCode)) {
+    digits = digits.slice(dialCode.length);
+  }
 
-  const prefixes: Record<string, string> = {
-    gm: '+220',
-    sn: '+221',
-    ng: '+234',
-    gh: '+233',
-    us: '+1',
-    mx: '+52',
-    gb: '+44',
-  };
+  // Already includes this country's calling code (e.g. 2207123456 or +2207123456).
+  // Require a plausible national remainder so short locals that happen to start
+  // with the dial digits are not mis-parsed.
+  if (digits.startsWith(dialCode) && digits.length - dialCode.length >= 6) {
+    return finalizeE164(digits);
+  }
 
-  const prefix = prefixes[countryCode.toLowerCase()] ?? '+220';
-  return `${prefix}${local}`;
+  // International number for another country (already had + stripped above)
+  if (phone.trim().startsWith('+')) {
+    return finalizeE164(digits);
+  }
+
+  return finalizeE164(`${dialCode}${digits}`);
+}
+
+/**
+ * Phone number to send to Stripe Issuing. Keeps the customer's real E.164 for
+ * wallet/profile, but maps Gambia's new 9-digit mobiles (83/86/87 + old 7) back
+ * to the legacy 7-digit national form Stripe still accepts.
+ *
+ * Example: +220877123456 → +2207123456
+ */
+export function toStripeCompatiblePhoneE164(phoneE164: string): string {
+  const digits = phoneE164.replace(/\D/g, '');
+  if (!digits.startsWith('220') || digits.length !== 12) {
+    return phoneE164.startsWith('+') ? `+${digits}` : finalizeE164(digits);
+  }
+
+  const national = digits.slice(3); // 9 digits
+  const operatorPrefix = national.slice(0, 2);
+  if (!GM_NINE_DIGIT_OPERATOR_PREFIXES.has(operatorPrefix)) {
+    return `+${digits}`;
+  }
+
+  const legacySeven = national.slice(2);
+  if (!/^\d{7}$/.test(legacySeven)) {
+    return `+${digits}`;
+  }
+
+  return `+220${legacySeven}`;
+}
+
+function finalizeE164(digits: string): string {
+  const compact = digits.replace(/\D/g, '');
+  if (compact.length < 8 || compact.length > 15) {
+    throw new Error(
+      'Invalid phone number format. Enter a valid mobile number with country code or local digits.',
+    );
+  }
+  return `+${compact}`;
 }
 
 export function getCardholderName(user: User): string {

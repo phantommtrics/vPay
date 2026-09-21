@@ -4,14 +4,15 @@ import type Stripe from 'stripe';
 import { computeCardExpirationAsync } from '../card-expiry.js';
 import { log } from '../logger.js';
 import { getStripe, getIssuingPlatformProgram, getIssuingCurrency, isStablecoinIssuingEnabled, stripeApiVersion } from './client.js';
+import { resolveUserPhoneE164 } from '../phone.js';
 import {
   buildBillingAddress,
   getCardholderName,
   getTermsAcceptanceIp,
   getTermsAcceptanceUnix,
-  normalizePhoneE164,
   parseDateOfBirth,
   resolveCountryCode,
+  toStripeCompatiblePhoneE164,
   usesLegacyBillingSandbox,
 } from './mappers.js';
 
@@ -78,7 +79,7 @@ export async function createCardholder(
       type: 'individual',
       name: getCardholderName(user),
       email: user.email,
-      phone_number: normalizePhoneE164(user.phone!, countryCode),
+      phone_number: toStripeCompatiblePhoneE164(resolveUserPhoneE164(user)),
       status: 'active',
       individual: {
         first_name: user.firstName!.trim(),

@@ -249,8 +249,21 @@ export type SupportTicketSummary = {
   comments?: SupportTicketComment[];
 };
 
+export type WhatsappUnavailableReason = 'not_configured' | 'no_phone';
+
+export type SupportWhatsappConfig = {
+  enabled: boolean;
+  supportE164?: string;
+  walletPhoneE164?: string;
+  walletPhoneMasked?: string;
+  unavailableReason?: WhatsappUnavailableReason;
+  token?: string;
+  prefill?: string;
+};
+
 export type SupportTicketsResponse = {
   configured: boolean;
   topics: SupportTopic[];
   tickets: SupportTicketSummary[];
+  whatsapp?: SupportWhatsappConfig;
 };

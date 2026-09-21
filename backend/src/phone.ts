@@ -22,13 +22,15 @@ export function normalizePhoneForUser(
 }
 
 export function resolveUserPhoneE164(user: Pick<User, 'phone' | 'phoneE164' | 'countryCode'>): string {
+  // Prefer re-normalizing from the raw phone so legacy double-prefixed
+  // phoneE164 values (e.g. +220220…) do not break card issuance.
+  if (user.phone?.trim()) {
+    return normalizePhoneForUser(user.phone.trim(), resolveCountryCode(user as User));
+  }
   if (user.phoneE164?.trim()) {
-    return user.phoneE164.trim();
+    return normalizePhoneForUser(user.phoneE164.trim(), resolveCountryCode(user as User));
   }
-  if (!user.phone?.trim()) {
-    throw new Error('Phone number is required');
-  }
-  return normalizePhoneForUser(user.phone.trim(), resolveCountryCode(user as User));
+  throw new Error('Phone number is required');
 }
 
 export async function assertPhoneAvailable(userId: string, phoneE164: string): Promise<void> {

@@ -4,6 +4,7 @@ import {
   normalizePhoneE164,
   parseDateOfBirth,
   resolveCountryCode,
+  toStripeCompatiblePhoneE164,
 } from '../src/stripe/mappers.js';
 
 function testMappers(): void {
@@ -15,6 +16,22 @@ function testMappers(): void {
 
   assert.equal(normalizePhoneE164('7123456', 'gm'), '+2207123456');
   assert.equal(normalizePhoneE164('+2207123456', 'gm'), '+2207123456');
+  assert.equal(normalizePhoneE164('2207123456', 'gm'), '+2207123456');
+  assert.equal(normalizePhoneE164('2202207123456', 'gm'), '+2207123456');
+  assert.equal(normalizePhoneE164('+2202207123456', 'gm'), '+2207123456');
+  assert.equal(normalizePhoneE164('0771234567', 'sn'), '+221771234567');
+  assert.equal(normalizePhoneE164('+221771234567', 'gm'), '+221771234567');
+
+  // Gambia 9-digit (PURA Phase 1): store full number, Stripe gets legacy 7-digit
+  assert.equal(normalizePhoneE164('877123456', 'gm'), '+220877123456');
+  assert.equal(normalizePhoneE164('220877123456', 'gm'), '+220877123456');
+  assert.equal(normalizePhoneE164('833123456', 'gm'), '+220833123456');
+  assert.equal(normalizePhoneE164('866123456', 'gm'), '+220866123456');
+  assert.equal(toStripeCompatiblePhoneE164('+220877123456'), '+2207123456');
+  assert.equal(toStripeCompatiblePhoneE164('+220833123456'), '+2203123456');
+  assert.equal(toStripeCompatiblePhoneE164('+220866123456'), '+2206123456');
+  assert.equal(toStripeCompatiblePhoneE164('+2207123456'), '+2207123456');
+  assert.equal(toStripeCompatiblePhoneE164('+221771234567'), '+221771234567');
 }
 
 async function testHealth(): Promise<void> {

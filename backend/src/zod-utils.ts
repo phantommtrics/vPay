@@ -23,6 +23,7 @@ const FIELD_LABELS: Record<string, string> = {
   topic: 'Topic',
   summary: 'Subject',
   message: 'Message',
+  from: 'WhatsApp number',
 };
 
 function formatFieldLabel(path: (string | number)[]): string {

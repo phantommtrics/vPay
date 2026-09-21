@@ -18,6 +18,7 @@ import type {
   SupportTicketSummary,
   SupportTicketsResponse,
   SupportTopicKey,
+  SupportWhatsappConfig,
   User,
   VirtualCardSummary,
   WalletSummary,
@@ -341,6 +342,14 @@ export async function getFundingOrder(fundingId: string): Promise<{ funding: Fun
 
 export async function listSupportTickets(): Promise<SupportTicketsResponse> {
   return request('/api/support/tickets');
+}
+
+export async function getWhatsappSupport(): Promise<{ whatsapp: SupportWhatsappConfig }> {
+  return request('/api/support/whatsapp');
+}
+
+export async function createWhatsappSession(): Promise<{ whatsapp: SupportWhatsappConfig }> {
+  return request('/api/support/whatsapp/session', { method: 'POST' });
 }
 
 export async function getSupportTicket(ticketId: string): Promise<{ ticket: SupportTicketSummary }> {

@@ -201,7 +201,14 @@ import {
 import { handleDirectPayWebhook } from './routes/directpay-webhook.js';
 import { handleGetWallet, handleListWalletTransactions } from './routes/wallet.js';
 import { handleStripeWebhook } from './routes/webhooks.js';
-import { handleCreateSupportTicket, handleGetSupportTicket, handleListSupportTickets } from './routes/support.js';
+import {
+  handleCreateSupportTicket,
+  handleCreateWhatsappSession,
+  handleGetSupportTicket,
+  handleGetWhatsappSupport,
+  handleListSupportTickets,
+  handleWhatsappIdentify,
+} from './routes/support.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -288,6 +295,9 @@ app.get('/api/wallet/transactions', requireAuth, handleListWalletTransactions);
 app.get('/api/support/tickets', requireAuth, handleListSupportTickets);
 app.post('/api/support/tickets', requireAuth, handleCreateSupportTicket);
 app.get('/api/support/tickets/:id', requireAuth, handleGetSupportTicket);
+app.get('/api/support/whatsapp', requireAuth, handleGetWhatsappSupport);
+app.post('/api/support/whatsapp/session', requireAuth, handleCreateWhatsappSession);
+app.post('/api/webhooks/deskline/whatsapp-identify', handleWhatsappIdentify);
 
 app.get('/api/card-fund/balance', requireAuth, handleGetCardFundBalance);
 app.post('/api/card-fund/unload', requireAuth, attachUserDevice, handleUnloadCard);
