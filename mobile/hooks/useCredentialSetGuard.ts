@@ -1,5 +1,5 @@
 import { useFocusEffect } from '@react-navigation/native';
-import { router } from 'expo-router';
+import { replaceRoute } from '@/lib/consumer-nav';
 import { useCallback, useState } from 'react';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,7 +22,7 @@ export function useCredentialSetGuard(screen: AppLockCredentialType, mode?: stri
         return;
       }
       setAllowed(false);
-      router.replace({
+      replaceRoute({
         pathname: '/verify-credential',
         params: { next: reauthNextForSetScreen(screen, mode, currentType) },
       });

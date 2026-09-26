@@ -21,6 +21,7 @@ import { PIN_LENGTH } from '@/lib/app-lock-credential';
 import { getBiometricLabel, getLockHint } from '@/lib/biometrics';
 import type { BiometricMethod } from '@/lib/biometrics';
 import { colors, radius, spacing } from '@/constants/theme';
+import { useWebLayout } from '@/hooks/useWebLayout';
 
 function BiometricGlyph({ method, dimmed }: { method: BiometricMethod; dimmed?: boolean }) {
   const color = dimmed ? colors.gray300 : colors.emerald600;
@@ -39,6 +40,7 @@ function BiometricGlyph({ method, dimmed }: { method: BiometricMethod; dimmed?: 
 
 export function AppLockScreen() {
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useWebLayout();
   const { signOut } = useAuth();
   const {
     isChecking,
@@ -83,9 +85,14 @@ export function AppLockScreen() {
   );
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View
+      style={[
+        styles.container,
+        isDesktop && styles.desktopCanvas,
+        { paddingTop: insets.top, paddingBottom: insets.bottom },
+      ]}>
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={[styles.flex, isDesktop && styles.desktopPhone]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Animated.View entering={FadeIn.duration(300)} style={styles.inner}>
           <Text style={styles.brand}>vPay</Text>
@@ -205,6 +212,15 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     backgroundColor: colors.white,
     zIndex: 100,
+  },
+  desktopCanvas: {
+    backgroundColor: colors.gray50,
+    alignItems: 'center',
+  },
+  desktopPhone: {
+    width: 420,
+    maxWidth: '100%',
+    backgroundColor: colors.white,
   },
   flex: {
     flex: 1,

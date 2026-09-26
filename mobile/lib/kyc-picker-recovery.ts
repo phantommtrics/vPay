@@ -1,15 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
+import { deleteSecureItem, getSecureItem, setSecureItem } from '@/lib/secure-storage';
 
 const PENDING_KYC_PICKER_KEY = 'vpay_pending_kyc_picker';
 
 export type KycPickerSide = 'front' | 'back' | 'selfie';
 
 export async function markPendingKycPicker(side: KycPickerSide): Promise<void> {
-  await SecureStore.setItemAsync(PENDING_KYC_PICKER_KEY, side);
+  await setSecureItem(PENDING_KYC_PICKER_KEY, side);
 }
 
 export async function getPendingKycPicker(): Promise<KycPickerSide | null> {
-  const side = await SecureStore.getItemAsync(PENDING_KYC_PICKER_KEY);
+  const side = await getSecureItem(PENDING_KYC_PICKER_KEY);
   if (side === 'front' || side === 'back' || side === 'selfie') {
     return side;
   }
@@ -17,5 +17,5 @@ export async function getPendingKycPicker(): Promise<KycPickerSide | null> {
 }
 
 export async function clearPendingKycPicker(): Promise<void> {
-  await SecureStore.deleteItemAsync(PENDING_KYC_PICKER_KEY);
+  await deleteSecureItem(PENDING_KYC_PICKER_KEY);
 }

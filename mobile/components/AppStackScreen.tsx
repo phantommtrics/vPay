@@ -1,15 +1,18 @@
-import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { type ReactNode } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DesktopPhoneFrame } from '@/components/desktop/DesktopPhoneFrame';
 import { colors, spacing } from '@/constants/theme';
+import { useInPanel } from '@/contexts/WebShellContext';
+import { useWebLayout } from '@/hooks/useWebLayout';
+import { goBack } from '@/lib/consumer-nav';
 
 export function AppStackHeader({ title, onBack }: { title: string; onBack?: () => void }) {
   return (
     <View style={styles.topBar}>
-      <Pressable style={styles.backButton} onPress={onBack ?? (() => router.back())}>
+      <Pressable style={styles.backButton} onPress={onBack ?? goBack}>
         <ArrowLeft size={22} color={colors.gray900} />
       </Pressable>
       <Text style={styles.screenTitle}>{title}</Text>
@@ -28,8 +31,10 @@ export function AppStackScreen({
   children: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const inPanel = useInPanel();
+  const { isDesktop } = useWebLayout();
 
-  return (
+  const screen = (
     <KeyboardAvoidingView
       style={[styles.container, { paddingTop: insets.top + spacing.md }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -37,6 +42,12 @@ export function AppStackScreen({
       <View style={[styles.body, { paddingBottom: insets.bottom + spacing.xl }]}>{children}</View>
     </KeyboardAvoidingView>
   );
+
+  if (isDesktop && !inPanel) {
+    return <DesktopPhoneFrame>{screen}</DesktopPhoneFrame>;
+  }
+
+  return screen;
 }
 
 const styles = StyleSheet.create({

@@ -17,6 +17,7 @@ import {
 } from '@/components/HistoryTransactionRow';
 import { PullToRefreshFlatList } from '@/components/PullToRefreshFlatList';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmbedMode } from '@/contexts/WebShellContext';
 import { getCardFundTransactions, getWalletTransactions } from '@/lib/api';
 import { formatGmd, formatSignedGmd, formatUsd } from '@/lib/currency';
 import { sanitizeUserFacingText } from '@/lib/user-facing-text';
@@ -153,6 +154,7 @@ function appendUnique<T extends { id: string }>(existing: T[], incoming: T[]): T
 
 export default function TransactionsScreen() {
   const insets = useSafeAreaInsets();
+  const embedded = useEmbedMode() === 'activity';
   const { user } = useAuth();
   const [filter, setFilter] = useState<FilterType>('all');
   const [search, setSearch] = useState('');
@@ -300,8 +302,10 @@ export default function TransactionsScreen() {
   );
 
   const listHeader = (
-    <View style={styles.header}>
-      <Text style={styles.title}>Transactions</Text>
+    <View style={[styles.header, embedded && styles.embeddedHeader]}>
+      <Text style={embedded ? styles.embeddedTitle : styles.title}>
+        {embedded ? 'Activity' : 'Transactions'}
+      </Text>
 
       <View style={styles.searchRow}>
         <View style={styles.searchInputWrap}>
@@ -347,7 +351,7 @@ export default function TransactionsScreen() {
       <ActivityIndicator color={colors.emerald600} style={styles.footerLoader} />
     ) : null;
 
-  return (
+  const list = (
     <PullToRefreshFlatList
       style={styles.container}
       data={filtered}
@@ -357,14 +361,15 @@ export default function TransactionsScreen() {
           <HistoryTransactionRow entry={item} />
         </View>
       )}
-      ListHeaderComponent={listHeader}
+      ListHeaderComponent={embedded ? null : listHeader}
       ListEmptyComponent={listEmpty}
       ListFooterComponent={listFooter}
       contentContainerStyle={[
         styles.content,
+        embedded && styles.embeddedContent,
         {
-          paddingTop: insets.top + spacing.lg,
-          paddingBottom: spacing.xl,
+          paddingTop: embedded ? spacing.sm : insets.top + spacing.lg,
+          paddingBottom: embedded ? spacing.md : spacing.xl,
           flexGrow: filtered.length === 0 ? 1 : undefined,
         },
       ]}
@@ -376,6 +381,17 @@ export default function TransactionsScreen() {
       onEndReachedThreshold={0.35}
     />
   );
+
+  if (embedded) {
+    return (
+      <View style={styles.embeddedWrap}>
+        {listHeader}
+        {list}
+      </View>
+    );
+  }
+
+  return list;
 }
 
 const styles = StyleSheet.create({
@@ -385,6 +401,26 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: spacing.lg,
+  },
+  embeddedWrap: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: colors.gray50,
+  },
+  embeddedHeader: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    marginBottom: 0,
+    gap: 12,
+  },
+  embeddedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.gray900,
+    fontFamily: 'Inter_700Bold',
+  },
+  embeddedContent: {
+    paddingHorizontal: spacing.md,
   },
   header: {
     gap: 16,

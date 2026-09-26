@@ -1,8 +1,11 @@
-import { router } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DesktopPhoneFrame } from '@/components/desktop/DesktopPhoneFrame';
+import { useInPanel } from '@/contexts/WebShellContext';
+import { useWebLayout } from '@/hooks/useWebLayout';
+import { goBack } from '@/lib/consumer-nav';
 import type { LegalDocument } from '@/lib/legal-content';
 import { colors, radius, spacing } from '@/constants/theme';
 
@@ -12,11 +15,13 @@ type LegalDocumentScreenProps = {
 
 export function LegalDocumentScreen({ document }: LegalDocumentScreenProps) {
   const insets = useSafeAreaInsets();
+  const inPanel = useInPanel();
+  const { isDesktop } = useWebLayout();
 
-  return (
+  const screen = (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={() => router.back()} accessibilityRole="button">
+        <Pressable style={styles.backButton} onPress={goBack} accessibilityRole="button">
           <ArrowLeft size={22} color={colors.gray900} />
         </Pressable>
         <Text style={styles.screenTitle} numberOfLines={1}>
@@ -26,6 +31,7 @@ export function LegalDocumentScreen({ document }: LegalDocumentScreenProps) {
       </View>
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + spacing.xl },
@@ -47,12 +53,22 @@ export function LegalDocumentScreen({ document }: LegalDocumentScreenProps) {
       </ScrollView>
     </View>
   );
+
+  if (isDesktop && !inPanel) {
+    return <DesktopPhoneFrame>{screen}</DesktopPhoneFrame>;
+  }
+
+  return screen;
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray50,
+    minHeight: 0,
+  },
+  scroll: {
+    flex: 1,
   },
   topBar: {
     flexDirection: 'row',

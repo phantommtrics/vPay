@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { router } from 'expo-router';
+import { goBack, pushRoute } from '@/lib/consumer-nav';
 import {
   AlertCircle,
   ArrowLeft,
@@ -96,7 +96,7 @@ export default function SecurityScreen() {
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={goBack}>
           <ArrowLeft size={22} color={colors.gray900} />
         </Pressable>
         <Text style={styles.screenTitle}>Security & Limits</Text>
@@ -104,6 +104,7 @@ export default function SecurityScreen() {
       </View>
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + spacing.xl },
@@ -157,14 +158,14 @@ export default function SecurityScreen() {
                 onPress={() => {
                   const dest = nextAfterVerify('change', credentialType);
                   if (hasCredentialReauth()) {
-                    router.push(
+                    pushRoute(
                       dest.params
                         ? { pathname: dest.pathname, params: dest.params }
                         : dest.pathname,
                     );
                     return;
                   }
-                  router.push({ pathname: '/verify-credential', params: { next: 'change' } });
+                  pushRoute({ pathname: '/verify-credential', params: { next: 'change' } });
                 }}
                 disabled={credentialBusy}>
                 <Text style={styles.choiceButtonText}>
@@ -177,14 +178,14 @@ export default function SecurityScreen() {
                   const next = credentialType === 'pin' ? 'switch-password' : 'switch-pin';
                   const dest = nextAfterVerify(next, credentialType);
                   if (hasCredentialReauth()) {
-                    router.push(
+                    pushRoute(
                       dest.params
                         ? { pathname: dest.pathname, params: dest.params }
                         : dest.pathname,
                     );
                     return;
                   }
-                  router.push({ pathname: '/verify-credential', params: { next } });
+                  pushRoute({ pathname: '/verify-credential', params: { next } });
                 }}
                 disabled={credentialBusy}>
                 <Text style={styles.choiceButtonText}>
@@ -194,12 +195,12 @@ export default function SecurityScreen() {
             </View>
           ) : (
             <View style={styles.credentialActions}>
-              <Pressable style={styles.choiceButton} onPress={() => router.push('/set-pin')}>
+              <Pressable style={styles.choiceButton} onPress={() => pushRoute('/set-pin')}>
                 <Text style={styles.choiceButtonText}>Set PIN</Text>
               </Pressable>
               <Pressable
                 style={styles.choiceButton}
-                onPress={() => router.push('/set-password')}>
+                onPress={() => pushRoute('/set-password')}>
                 <Text style={styles.choiceButtonText}>Set password</Text>
               </Pressable>
             </View>
@@ -274,6 +275,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.gray50,
+    minHeight: 0,
+  },
+  scroll: {
+    flex: 1,
   },
   topBar: {
     flexDirection: 'row',

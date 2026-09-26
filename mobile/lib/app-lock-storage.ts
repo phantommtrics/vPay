@@ -1,15 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '@/lib/secure-storage';
 
 const APP_LOCK_ENABLED_KEY = 'vpay_app_lock_enabled';
 
 export async function getAppLockEnabled(): Promise<boolean> {
-  const value = await SecureStore.getItemAsync(APP_LOCK_ENABLED_KEY);
+  const value = await getSecureItem(APP_LOCK_ENABLED_KEY);
   if (value === null) return true;
   return value === 'true';
 }
 
 export async function setAppLockEnabled(enabled: boolean): Promise<void> {
-  await SecureStore.setItemAsync(APP_LOCK_ENABLED_KEY, enabled ? 'true' : 'false');
+  await setSecureItem(APP_LOCK_ENABLED_KEY, enabled ? 'true' : 'false');
 }
 
 let skipNextAppLock = false;

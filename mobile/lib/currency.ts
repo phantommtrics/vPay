@@ -16,6 +16,10 @@ export function formatMaskedCardBalance(currency: string): string {
   return `${symbol}••••••`;
 }
 
+export function formatMaskedGmd(): string {
+  return 'D ••••••';
+}
+
 export function formatGmd(amount: number): string {
   return `D ${amount.toFixed(2)}`;
 }

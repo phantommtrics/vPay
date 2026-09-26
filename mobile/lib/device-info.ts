@@ -1,6 +1,6 @@
 import * as Application from 'expo-application';
 import * as Device from 'expo-device';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '@/lib/secure-storage';
 import { Platform } from 'react-native';
 
 const FINGERPRINT_KEY = 'vpay_device_fingerprint';
@@ -64,13 +64,13 @@ function createFingerprint(): string {
 }
 
 export async function getOrCreateDeviceFingerprint(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(FINGERPRINT_KEY);
+  const existing = await getSecureItem(FINGERPRINT_KEY);
   if (existing) {
     return truncate(existing, DEVICE_FIELD_LIMITS.fingerprint) ?? existing.slice(0, DEVICE_FIELD_LIMITS.fingerprint);
   }
 
   const fingerprint = createFingerprint();
-  await SecureStore.setItemAsync(FINGERPRINT_KEY, fingerprint);
+  await setSecureItem(FINGERPRINT_KEY, fingerprint);
   return fingerprint;
 }
 

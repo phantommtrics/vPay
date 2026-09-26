@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { router } from 'expo-router';
+import { pushRoute } from '@/lib/consumer-nav';
 import { ChevronRight, MessageCircle, Send, Ticket } from 'lucide-react-native';
 import {
   ActivityIndicator,
@@ -52,7 +52,7 @@ export default function HelpSupportScreen() {
         'Chat on WhatsApp is only available from the number on your vPay wallet. Add your phone in Profile first.',
         [
           { text: 'Not now', style: 'cancel' },
-          { text: 'Add phone', onPress: () => router.push('/personal-details') },
+          { text: 'Add phone', onPress: () => pushRoute('/personal-details') },
         ],
       );
       return;
@@ -101,6 +101,7 @@ export default function HelpSupportScreen() {
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <AppStackHeader title="Help & Support" />
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         showsVerticalScrollIndicator={false}>
         <Text style={styles.intro}>
@@ -132,7 +133,7 @@ export default function HelpSupportScreen() {
           iconColor={colors.purple600}
           title="Your tickets"
           subtitle="View status and details of requests you have sent"
-          onPress={() => router.push('/my-tickets')}
+          onPress={() => pushRoute('/my-tickets')}
         />
         <HubCard
           icon={Send}
@@ -140,7 +141,7 @@ export default function HelpSupportScreen() {
           iconColor={colors.emerald600}
           title="Send a request"
           subtitle="Ask a question or report a problem"
-          onPress={() => router.push('/send-request')}
+          onPress={() => pushRoute('/send-request')}
         />
       </ScrollView>
     </View>
@@ -192,7 +193,11 @@ function HubCard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: colors.gray50,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: spacing.lg,

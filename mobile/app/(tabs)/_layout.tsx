@@ -8,11 +8,14 @@ import {
 } from 'lucide-react-native';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
+import { DesktopShell } from '@/components/desktop/DesktopShell';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/constants/theme';
+import { useWebLayout } from '@/hooks/useWebLayout';
 
 export default function TabLayout() {
   const { user, isLoading } = useAuth();
+  const { isDesktop } = useWebLayout();
 
   if (isLoading) {
     return (
@@ -24,6 +27,10 @@ export default function TabLayout() {
 
   if (!user) {
     return <Redirect href="/onboarding" />;
+  }
+
+  if (isDesktop) {
+    return <DesktopShell />;
   }
 
   return (

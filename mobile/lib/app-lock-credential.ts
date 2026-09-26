@@ -1,4 +1,4 @@
-import * as SecureStore from 'expo-secure-store';
+import { deleteSecureItem, getSecureItem } from '@/lib/secure-storage';
 
 import {
   ApiError,
@@ -53,7 +53,7 @@ export function validateCredential(type: AppLockCredentialType, value: string): 
 }
 
 async function readLocalCredential(): Promise<StoredCredential | null> {
-  const raw = await SecureStore.getItemAsync(CREDENTIAL_KEY);
+  const raw = await getSecureItem(CREDENTIAL_KEY);
   if (!raw) return null;
 
   try {
@@ -66,7 +66,7 @@ async function readLocalCredential(): Promise<StoredCredential | null> {
 }
 
 export async function clearLocalAppLockCredential(): Promise<void> {
-  await SecureStore.deleteItemAsync(CREDENTIAL_KEY);
+  await deleteSecureItem(CREDENTIAL_KEY);
 }
 
 /** Upload a leftover on-device PIN/password once, then delete the local copy. */

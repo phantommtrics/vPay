@@ -80,7 +80,7 @@ export function VirtualCard({
         <View style={styles.content}>
           <View style={styles.topRow}>
             <VPayWordmark variant="dark" width={96} height={31} />
-            <CardBrandMark brand={card.brand} size={32} />
+            <CardBrandMark brand={card.brand} size={28} />
           </View>
 
           <View style={styles.bottomSection}>
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
   },
   bottomSection: {

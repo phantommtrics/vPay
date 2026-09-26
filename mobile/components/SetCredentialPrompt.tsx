@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { pushRoute } from '@/lib/consumer-nav';
 import { KeyRound } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -29,7 +29,7 @@ export function SetCredentialPrompt() {
     async function maybeShow() {
       try {
         clearPendingCredentialPrompt();
-        if (!user.appLockType) {
+        if (user && !user.appLockType) {
           setVisible(true);
         }
       } catch {
@@ -50,7 +50,7 @@ export function SetCredentialPrompt() {
 
   const openSecurity = () => {
     setVisible(false);
-    router.push('/security');
+    pushRoute('/security');
   };
 
   return (

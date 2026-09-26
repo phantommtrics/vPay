@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { CheckCircle2 } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,15 +6,12 @@ import { AppStackScreen } from '@/components/AppStackScreen';
 import { OtpInput } from '@/components/OtpInput';
 import { useAppLock } from '@/contexts/AppLockContext';
 import { PIN_LENGTH } from '@/lib/app-lock-credential';
+import { returnToSecurity } from '@/lib/consumer-nav';
 import { credentialSaveMessage, getStagedCredential, isCredentialFlowComplete, markCredentialFlowComplete } from '@/lib/credential-setup';
 import { colors, radius, spacing } from '@/constants/theme';
 
 function leaveCredentialFlow() {
-  if (router.canDismiss()) {
-    router.dismissTo('/security');
-    return;
-  }
-  router.replace('/security');
+  returnToSecurity();
 }
 
 export default function ConfirmPinScreen() {

@@ -17,11 +17,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { VPayWordmark } from '@/components/VPayWordmark';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmbedMode } from '@/contexts/WebShellContext';
 import { getUserDisplayName, getUserInitials } from '@/lib/api';
+import { pushRoute } from '@/lib/consumer-nav';
 import { colors, radius, spacing } from '@/constants/theme';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
+  const embedded = useEmbedMode() === 'profile';
   const { user, signOut } = useAuth();
 
   if (!user) return null;
@@ -42,14 +45,18 @@ export default function ProfileScreen() {
       style={styles.container}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + spacing.lg, paddingBottom: spacing.xl },
+        embedded && styles.embeddedContent,
+        {
+          paddingTop: embedded ? spacing.md : insets.top + spacing.lg,
+          paddingBottom: embedded ? spacing.md : spacing.xl,
+        },
       ]}
       showsVerticalScrollIndicator={false}>
-      <Text style={styles.title}>Profile</Text>
+      {embedded ? null : <Text style={styles.title}>Profile</Text>}
 
       <Pressable
         style={styles.userCard}
-        onPress={() => router.push('/personal-details')}
+        onPress={() => pushRoute('/personal-details')}
         accessibilityRole="button"
         accessibilityLabel="Open personal details">
         <View style={styles.avatar}>
@@ -74,7 +81,7 @@ export default function ProfileScreen() {
           </View>
         </View>
       ) : user.kycStatus === 'pending' ? (
-        <Pressable style={styles.kycReview} onPress={() => router.push('/personal-details')}>
+        <Pressable style={styles.kycReview} onPress={() => pushRoute('/personal-details')}>
           <Clock size={20} color={colors.amber600} />
           <View style={styles.kycContent}>
             <Text style={styles.kycPendingTitle}>Under review</Text>
@@ -85,7 +92,7 @@ export default function ProfileScreen() {
           <ChevronRight size={18} color={colors.amber600} />
         </Pressable>
       ) : user.kycStatus === 'rejected' ? (
-        <Pressable style={styles.kycRejected} onPress={() => router.push('/personal-details')}>
+        <Pressable style={styles.kycRejected} onPress={() => pushRoute('/personal-details')}>
           <AlertCircle size={20} color={colors.red500} />
           <View style={styles.kycContent}>
             <Text style={styles.kycRejectedTitle}>Verification rejected</Text>
@@ -98,7 +105,7 @@ export default function ProfileScreen() {
       ) : (
         <Pressable
           style={styles.kycPending}
-          onPress={() => router.push('/personal-details')}>
+          onPress={() => pushRoute('/personal-details')}>
           <AlertCircle size={20} color={colors.amber600} />
           <View style={styles.kycContent}>
             <Text style={styles.kycPendingTitle}>Verification Required</Text>
@@ -116,35 +123,35 @@ export default function ProfileScreen() {
           label="Personal Details"
           iconBg={colors.blue50}
           iconColor={colors.blue600}
-          onPress={() => router.push('/personal-details')}
+          onPress={() => pushRoute('/personal-details')}
         />
         <SettingsRow
           icon={ShieldCheck}
           label="Security & Limits"
           iconBg={colors.emerald50}
           iconColor={colors.emerald600}
-          onPress={() => router.push('/security')}
+          onPress={() => pushRoute('/security')}
         />
         <SettingsRow
           icon={HelpCircle}
           label="Help & Support"
           iconBg={colors.purple50}
           iconColor={colors.purple600}
-          onPress={() => router.push('/help-support')}
+          onPress={() => pushRoute('/help-support')}
         />
         <SettingsRow
           icon={FileText}
           label="Terms of Service"
           iconBg={colors.gray100}
           iconColor={colors.gray600}
-          onPress={() => router.push('/terms')}
+          onPress={() => pushRoute('/terms')}
         />
         <SettingsRow
           icon={Shield}
           label="Privacy Policy"
           iconBg={colors.blue50}
           iconColor={colors.blue600}
-          onPress={() => router.push('/privacy')}
+          onPress={() => pushRoute('/privacy')}
         />
         <SettingsRow
           icon={Trash2}
@@ -152,7 +159,7 @@ export default function ProfileScreen() {
           iconBg={colors.red50}
           iconColor={colors.red500}
           labelColor={colors.red500}
-          onPress={() => router.push('/delete-account')}
+          onPress={() => pushRoute('/delete-account')}
           isLast
         />
       </View>
@@ -225,6 +232,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     gap: 24,
+  },
+  embeddedContent: {
+    paddingHorizontal: spacing.md,
+    gap: 12,
   },
   title: {
     fontSize: 24,

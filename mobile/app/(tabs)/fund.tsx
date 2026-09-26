@@ -17,8 +17,10 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
+import { SecretBalance } from '@/components/SecretBalance';
 import { OtpInput, type OtpInputRef } from '@/components/OtpInput';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmbedMode, useReportWalletFlow } from '@/contexts/WebShellContext';
 import { useWallet } from '@/hooks/useWallet';
 import {
   ApiError,
@@ -31,7 +33,7 @@ import {
   startFundWallet,
 } from '@/lib/api';
 import { fundingSources } from '@/lib/data';
-import { formatGmd } from '@/lib/currency';
+import { formatGmd, formatMaskedGmd } from '@/lib/currency';
 import {
   estimateWalletTopupFee,
   formatWalletTopupFeeLabel,
@@ -66,10 +68,13 @@ function amountsMatch(stored: number, entered: number): boolean {
 
 export default function FundScreen() {
   const insets = useSafeAreaInsets();
+  const embedded = useEmbedMode() === 'wallet';
+  const reportWalletFlow = useReportWalletFlow();
   const { user } = useAuth();
   const { wallet, loading: walletLoading, refreshing: walletRefreshing, refresh: refreshWallet } =
     useWallet(Boolean(user?.kycComplete));
   const [flowStep, setFlowStep] = useState<FundFlowStep>('main');
+  const [showWalletBalance, setShowWalletBalance] = useState(false);
   const [amount, setAmount] = useState('');
   const [source, setSource] = useState('aps');
   const [isLoading, setIsLoading] = useState(false);
@@ -89,6 +94,12 @@ export default function FundScreen() {
   const prepareRef = useRef<FundPrepareResponse | null>(null);
   const apsSessionRef = useRef<ApsCheckoutSession | null>(null);
   const fundInFlightRef = useRef(false);
+  const walletFlowActive = flowStep !== 'main' || isSuccess;
+
+  useEffect(() => {
+    reportWalletFlow(embedded && walletFlowActive);
+    return () => reportWalletFlow(false);
+  }, [embedded, reportWalletFlow, walletFlowActive]);
 
   const clearApsSession = useCallback(() => {
     apsSessionRef.current = null;
@@ -383,12 +394,16 @@ export default function FundScreen() {
     }
   };
 
+  const pageTop = embedded ? spacing.md : insets.top + spacing.lg;
+  const successTop = embedded ? spacing.lg : insets.top + spacing.xl;
+  const fillCheckout = !embedded || walletFlowActive;
+
   if (isSuccess) {
     return (
       <View
         style={[
           styles.successContainer,
-          { paddingTop: insets.top + spacing.xl },
+          { paddingTop: successTop },
         ]}>
         <View style={styles.successIcon}>
           <CheckCircle2 size={40} color={colors.emerald600} />
@@ -416,13 +431,15 @@ export default function FundScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={fillCheckout ? styles.container : undefined}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <PullToRefreshScrollView
-        style={styles.scroll}
+        fill={fillCheckout}
+        style={fillCheckout ? styles.scroll : undefined}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + spacing.lg, paddingBottom: spacing.xl },
+          embedded && styles.embeddedContent,
+          { paddingTop: pageTop, paddingBottom: embedded ? spacing.md : spacing.xl },
         ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -477,7 +494,13 @@ export default function FundScreen() {
                 <ActivityIndicator color={colors.emerald600} style={{ marginVertical: 8 }} />
               ) : wallet ? (
                 <>
-                  <Text style={styles.walletBalance}>{formatGmd(wallet.balanceGmd)}</Text>
+                  <SecretBalance
+                    amount={formatGmd(wallet.balanceGmd)}
+                    masked={formatMaskedGmd()}
+                    shown={showWalletBalance}
+                    onToggle={() => setShowWalletBalance((visible) => !visible)}
+                    amountStyle={styles.walletBalance}
+                  />
                   {/* <Text style={styles.walletPhone}>{wallet.phoneNumber}</Text> */}
                 </>
               ) : (
@@ -735,6 +758,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     gap: 24,
+  },
+  embeddedContent: {
+    paddingHorizontal: spacing.md,
+    gap: 12,
   },
   stepBlock: {
     gap: 24,

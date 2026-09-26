@@ -5,6 +5,7 @@ import {
   type AppStateStatus,
   Linking,
   Modal,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -21,6 +22,14 @@ import { evaluateAppUpdate, type AppUpdateDecision } from '@/lib/app-update';
  * (login, tabs, etc.) when the backend requires a newer build.
  */
 export function ForceUpdateGate({ children }: { children: React.ReactNode }) {
+  if (Platform.OS === 'web') {
+    return children;
+  }
+
+  return <NativeForceUpdateGate>{children}</NativeForceUpdateGate>;
+}
+
+function NativeForceUpdateGate({ children }: { children: React.ReactNode }) {
   const insets = useSafeAreaInsets();
   const [decision, setDecision] = useState<AppUpdateDecision | null>(null);
   const [dismissed, setDismissed] = useState(false);

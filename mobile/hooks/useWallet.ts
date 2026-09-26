@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { ApiError, getWallet } from '@/lib/api';
@@ -12,12 +12,42 @@ type UseWalletResult = {
   refresh: () => Promise<void>;
 };
 
+let sharedWallet: WalletSummary | null = null;
+let sharedWalletLoaded = false;
+const walletListeners = new Set<() => void>();
+
+function commitWallet(wallet: WalletSummary | null) {
+  if (walletListeners.size === 0) return;
+  sharedWallet = wallet;
+  sharedWalletLoaded = true;
+  walletListeners.forEach((listener) => listener());
+}
+
 export function useWallet(enabled = true): UseWalletResult {
-  const [wallet, setWallet] = useState<WalletSummary | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [wallet, setWallet] = useState<WalletSummary | null>(sharedWalletLoaded ? sharedWallet : null);
+  const [loading, setLoading] = useState(enabled && !sharedWalletLoaded);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasLoadedRef = useRef(false);
+  const hasLoadedRef = useRef(sharedWalletLoaded);
+
+  const applySharedWallet = useCallback(() => {
+    if (!sharedWalletLoaded) return;
+    setWallet(sharedWallet);
+    setLoading(false);
+    hasLoadedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    walletListeners.add(applySharedWallet);
+    applySharedWallet();
+    return () => {
+      walletListeners.delete(applySharedWallet);
+      if (walletListeners.size === 0) {
+        sharedWallet = null;
+        sharedWalletLoaded = false;
+      }
+    };
+  }, [applySharedWallet]);
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
@@ -31,10 +61,10 @@ export function useWallet(enabled = true): UseWalletResult {
 
     try {
       const data = await getWallet();
-      setWallet(data.wallet);
+      commitWallet(data.wallet);
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        setWallet(null);
+        commitWallet(null);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load wallet');
       }

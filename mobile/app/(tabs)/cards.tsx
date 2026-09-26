@@ -23,13 +23,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { CardBalanceRow } from '@/components/CardBalanceRow';
+import { SecretBalance } from '@/components/SecretBalance';
 import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCards } from '@/hooks/useCards';
+import { useEmbedMode, useReportCardsExpanded } from '@/contexts/WebShellContext';
+import { applyPrimaryCardBalance, useCards } from '@/hooks/useCards';
 import { useWallet } from '@/hooks/useWallet';
 import { ApiError, fundCardFromWallet, getFundConfig, payCardIssuance, unloadCardToWallet } from '@/lib/api';
-import { formatCardBalance, formatGmd } from '@/lib/currency';
+import { formatCardBalance, formatGmd, formatMaskedGmd } from '@/lib/currency';
 import {
   estimateWalletTopupFee,
   formatWalletTopupFeeLabel,
@@ -41,6 +43,8 @@ import { colors, radius, spacing } from '@/constants/theme';
 
 export default function CardsScreen() {
   const insets = useSafeAreaInsets();
+  const embedded = useEmbedMode() === 'cards';
+  const reportCardsExpanded = useReportCardsExpanded();
   const { user } = useAuth();
   const {
     primaryCard,
@@ -79,6 +83,7 @@ export default function CardsScreen() {
   const [showWithdrawPanel, setShowWithdrawPanel] = useState(false);
   const [showFreezePanel, setShowFreezePanel] = useState(false);
   const [showDeletePanel, setShowDeletePanel] = useState(false);
+  const [showWalletBalance, setShowWalletBalance] = useState(false);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [isWithdrawing, setIsWithdrawing] = useState(false);
   const [withdrawError, setWithdrawError] = useState('');
@@ -87,6 +92,12 @@ export default function CardsScreen() {
   const [reissueError, setReissueError] = useState('');
   const [freezeError, setFreezeError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const cardsExpanded = Boolean(fundSuccess || withdrawSuccess);
+
+  useEffect(() => {
+    reportCardsExpanded(embedded && cardsExpanded);
+    return () => reportCardsExpanded(false);
+  }, [cardsExpanded, embedded, reportCardsExpanded]);
 
   const numFundAmount = parseFloat(fundAmount) || 0;
   const cardFundFee: WalletTopupFeePricing | undefined =
@@ -196,7 +207,8 @@ export default function CardsScreen() {
     setIsFunding(true);
     try {
       const result = await fundCardFromWallet(numFundAmount);
-      await Promise.all([refresh(), refreshWallet()]);
+      applyPrimaryCardBalance(result.card);
+      await Promise.all([refresh({ silent: true }), refreshWallet()]);
       setFundAmount('');
       setFundSuccess({
         gmd: result.transaction.amountGmd,
@@ -222,7 +234,8 @@ export default function CardsScreen() {
     setIsWithdrawing(true);
     try {
       const result = await unloadCardToWallet(numWithdrawAmount);
-      await Promise.all([refresh(), refreshWallet()]);
+      applyPrimaryCardBalance(result.card);
+      await Promise.all([refresh({ silent: true }), refreshWallet()]);
       setWithdrawAmount('');
       setWithdrawSuccess({
         gmd: result.transaction.amountGmd,
@@ -243,9 +256,12 @@ export default function CardsScreen() {
     refreshWallet,
   ]);
 
+  const pageTop = embedded ? spacing.md : insets.top + spacing.lg;
+  const successTop = embedded ? spacing.lg : insets.top + spacing.xl;
+
   if (fundSuccess) {
     return (
-      <View style={[styles.successContainer, { paddingTop: insets.top + spacing.xl }]}>
+      <View style={[styles.successContainer, { paddingTop: successTop }]}>
         <View style={styles.successIcon}>
           <CheckCircle2 size={40} color={colors.emerald600} />
         </View>
@@ -269,7 +285,7 @@ export default function CardsScreen() {
 
   if (withdrawSuccess) {
     return (
-      <View style={[styles.successContainer, { paddingTop: insets.top + spacing.xl }]}>
+      <View style={[styles.successContainer, { paddingTop: successTop }]}>
         <View style={styles.successIcon}>
           <CheckCircle2 size={40} color={colors.emerald600} />
         </View>
@@ -298,18 +314,23 @@ export default function CardsScreen() {
       style={styles.container}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + spacing.lg, paddingBottom: spacing.xl },
+        embedded && styles.embeddedContent,
+        { paddingTop: pageTop, paddingBottom: embedded ? spacing.md : spacing.xl },
       ]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       refreshing={refreshing}
       onRefresh={onRefresh}>
-      <View>
-        <Text style={styles.title}>Your Cards</Text>
-        <Text style={styles.subtitle}>Manage your virtual cards</Text>
-      </View>
+      {embedded ? (
+        <Text style={styles.embeddedTitle}>Card</Text>
+      ) : (
+        <View>
+          <Text style={styles.title}>Your Cards</Text>
+          <Text style={styles.subtitle}>Manage your virtual cards</Text>
+        </View>
+      )}
 
-      {loading ? (
+      {embedded ? null : loading ? (
         <View style={styles.loading}>
           <ActivityIndicator color={colors.emerald600} />
         </View>
@@ -457,9 +478,17 @@ export default function CardsScreen() {
               </View>
               <View style={styles.balanceChip}>
                 <Text style={styles.balanceChipLabel}>Wallet available</Text>
-                <Text style={styles.balanceChipValue}>
-                  {wallet ? formatGmd(wallet.balanceGmd) : '—'}
-                </Text>
+                {wallet ? (
+                  <SecretBalance
+                    amount={formatGmd(wallet.balanceGmd)}
+                    masked={formatMaskedGmd()}
+                    shown={showWalletBalance}
+                    onToggle={() => setShowWalletBalance((visible) => !visible)}
+                    amountStyle={styles.balanceChipValue}
+                  />
+                ) : (
+                  <Text style={styles.balanceChipValue}>—</Text>
+                )}
               </View>
             </View>
 
@@ -488,7 +517,7 @@ export default function CardsScreen() {
               </View>
               {wallet ? (
                 <Text style={styles.amountHint}>
-                  Available: {formatGmd(wallet.balanceGmd)}
+                  Available: {showWalletBalance ? formatGmd(wallet.balanceGmd) : formatMaskedGmd()}
                   {fundUsdEstimate !== undefined && numFundAmount > 0
                     ? ` · ≈ $${fundUsdEstimate.toFixed(2)} USD to card`
                     : ''}
@@ -556,9 +585,17 @@ export default function CardsScreen() {
               </View>
               <View style={styles.balanceChip}>
                 <Text style={styles.balanceChipLabel}>Wallet available</Text>
-                <Text style={styles.balanceChipValue}>
-                  {wallet ? formatGmd(wallet.balanceGmd) : '—'}
-                </Text>
+                {wallet ? (
+                  <SecretBalance
+                    amount={formatGmd(wallet.balanceGmd)}
+                    masked={formatMaskedGmd()}
+                    shown={showWalletBalance}
+                    onToggle={() => setShowWalletBalance((visible) => !visible)}
+                    amountStyle={styles.balanceChipValue}
+                  />
+                ) : (
+                  <Text style={styles.balanceChipValue}>—</Text>
+                )}
               </View>
             </View>
 
@@ -737,6 +774,16 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     gap: 24,
+  },
+  embeddedContent: {
+    paddingHorizontal: spacing.md,
+    gap: 12,
+  },
+  embeddedTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.gray900,
+    fontFamily: 'Inter_700Bold',
   },
   title: {
     fontSize: 24,

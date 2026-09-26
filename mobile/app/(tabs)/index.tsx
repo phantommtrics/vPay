@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import {
   AlertCircle,
   ArrowDownLeft,
@@ -21,15 +20,18 @@ import { ExpandableVirtualCard } from '@/components/ExpandableVirtualCard';
 import { PullToRefreshScrollView } from '@/components/PullToRefreshScrollView';
 import { TransactionRow } from '@/components/TransactionRow';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmbedMode } from '@/contexts/WebShellContext';
 import { useCardActivity } from '@/hooks/useCardActivity';
 import { useCards } from '@/hooks/useCards';
 import { ApiError, getUserDisplayName, getUserInitials, hasDisplayName, payCardIssuance } from '@/lib/api';
 import { formatGmd } from '@/lib/currency';
 import { colors, radius, spacing } from '@/constants/theme';
+import { isDesktopShellActive, pushRoute } from '@/lib/consumer-nav';
 import { sanitizeUserFacingText } from '@/lib/user-facing-text';
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const embedded = useEmbedMode() === 'home';
   const { user, refreshUser } = useAuth();
   const {
     primaryCard,
@@ -110,7 +112,11 @@ export default function HomeScreen() {
       style={styles.container}
       contentContainerStyle={[
         styles.content,
-        { paddingTop: insets.top + spacing.lg, paddingBottom: spacing.xl },
+        embedded && styles.embeddedContent,
+        {
+          paddingTop: embedded ? spacing.md : insets.top + spacing.lg,
+          paddingBottom: embedded ? spacing.md : spacing.xl,
+        },
       ]}
       showsVerticalScrollIndicator={false}
       refreshing={refreshing}
@@ -118,7 +124,7 @@ export default function HomeScreen() {
       {!user.kycComplete ? (
         <Pressable
           style={styles.verifyBanner}
-          onPress={() => router.push('/personal-details')}>
+          onPress={() => pushRoute('/personal-details')}>
           <View style={styles.verifyIcon}>
             <AlertCircle size={20} color={colors.amber600} />
           </View>
@@ -166,7 +172,7 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
-      {showGreeting && displayName && initials ? (
+      {showGreeting && displayName && initials && !embedded ? (
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Welcome back,</Text>
@@ -183,7 +189,7 @@ export default function HomeScreen() {
           <ActivityIndicator color={colors.emerald600} />
         </View>
       ) : primaryCard ? (
-        <View style={styles.cardSection}>
+        <View style={[styles.cardSection, embedded && styles.embeddedCard]}>
           <ExpandableVirtualCard
             card={primaryCard}
             stripePublishableKey={stripePublishableKey}
@@ -256,30 +262,32 @@ export default function HomeScreen() {
           label="Top up wallet"
           bg={colors.emerald100}
           color={colors.emerald600}
-          onPress={() => router.push('/fund')}
+          onPress={() => pushRoute('/fund')}
         />
         <QuickAction
           icon={Plus}
           label="New Card"
           bg={colors.amber100}
           color={colors.amber600}
-          onPress={() => router.push('/cards')}
+          onPress={() => pushRoute('/cards')}
         />
         <QuickAction
           icon={ShieldCheck}
           label="Limits"
           bg={colors.teal100}
           color={colors.teal600}
-          onPress={() => router.push('/profile')}
+          onPress={() =>
+            isDesktopShellActive() ? pushRoute('/security') : pushRoute('/profile')
+          }
         />
       </View>
 
-      <View style={styles.section}>
+      {embedded ? null : <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Recent Activity</Text>
           <Pressable
             style={styles.seeAll}
-            onPress={() => router.push('/transactions')}>
+            onPress={() => pushRoute('/transactions')}>
             <Text style={styles.seeAllText}>See all</Text>
             <ChevronRight size={16} color={colors.emerald600} />
           </Pressable>
@@ -300,7 +308,7 @@ export default function HomeScreen() {
             cardActivity.map((tx) => <TransactionRow key={tx.id} transaction={tx} />)
           )}
         </View>
-      </View>
+      </View>}
     </PullToRefreshScrollView>
   );
 }
@@ -336,6 +344,15 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.lg,
     gap: 32,
+  },
+  embeddedContent: {
+    paddingHorizontal: spacing.md,
+    gap: 16,
+  },
+  embeddedCard: {
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
   },
   verifyBanner: {
     flexDirection: 'row',

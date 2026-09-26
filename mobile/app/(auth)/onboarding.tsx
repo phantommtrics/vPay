@@ -25,9 +25,11 @@ import {
 import Animated, { FadeInDown, FadeInUp, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DesktopLogin } from '@/components/desktop/DesktopLogin';
 import { OtpInput, type OtpInputRef } from '@/components/OtpInput';
 import { VPayWordmark } from '@/components/VPayWordmark';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWebLayout } from '@/hooks/useWebLayout';
 import { sendOtp } from '@/lib/api';
 import { collectDeviceInfo } from '@/lib/device-info';
 import { colors, radius, spacing } from '@/constants/theme';
@@ -38,6 +40,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
+  const { isDesktop } = useWebLayout();
   const { signIn } = useAuth();
   const emailRef = useRef<TextInput>(null);
   const otpRef = useRef<OtpInputRef>(null);
@@ -147,66 +150,26 @@ export default function OnboardingScreen() {
     Keyboard.dismiss();
   }, []);
 
-  return (
-    <View style={styles.root}>
-      <Pressable
-        onPress={dismissKeyboard}
-        style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
-        <LinearGradient
-          colors={[colors.emerald950, colors.emerald800, colors.teal900]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View style={styles.orbLarge} />
-        <View style={styles.orbSmall} />
-
-        {step === 'otp' ? (
-          <Pressable style={styles.backButton} onPress={goBackToEmail}>
-            <ArrowLeft size={20} color={colors.emerald200} />
-            <Text style={styles.backText}>Change email</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.backSpacer} />
-        )}
-
-        <Animated.View entering={FadeInDown.duration(500)} style={styles.heroContent}>
-          <View style={styles.wordmarkWrap}>
-            <VPayWordmark variant="dark" width={200} height={66} />
-          </View>
-
-          <StepIndicator step={step} />
-        </Animated.View>
-      </Pressable>
-
-      <KeyboardAvoidingView
-        style={styles.sheetWrap}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView
-          contentContainerStyle={[
-            styles.sheet,
-            { paddingBottom: insets.bottom + spacing.xl },
-          ]}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}>
-          <Pressable onPress={dismissKeyboard} style={styles.sheetPressable}>
-          {step === 'email' ? (
+  const form = (
+    <>
+      {step === 'email' ? (
             <Animated.View
               key="email-step"
               entering={FadeInUp.duration(400)}
               exiting={FadeOut.duration(200)}
               style={styles.stepContent}>
-              <Text style={styles.title}>Get started</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, isDesktop && styles.titleLeft]}>Get started</Text>
+              <Text style={[styles.subtitle, isDesktop && styles.subtitleLeft]}>
                 Enter your email and we&apos;ll send a secure 6-digit code. No password needed.
               </Text>
 
-              <View style={styles.features}>
-                <FeatureChip icon={Shield} label="Bank-grade security" />
-                <FeatureChip icon={CreditCard} label="Instant virtual cards" />
-                <FeatureChip icon={Sparkles} label="No password" />
-              </View>
+              {isDesktop ? null : (
+                <View style={styles.features}>
+                  <FeatureChip icon={Shield} label="Bank-grade security" />
+                  <FeatureChip icon={CreditCard} label="Instant virtual cards" />
+                  <FeatureChip icon={Sparkles} label="No password" />
+                </View>
+              )}
 
               <View style={styles.form}>
                 <Text style={styles.label}>Email address</Text>
@@ -257,13 +220,16 @@ export default function OnboardingScreen() {
               entering={FadeInUp.duration(400)}
               exiting={FadeOut.duration(200)}
               style={styles.stepContent}>
-              <View style={styles.otpHeader}>
-                <View style={styles.mailIconWrap}>
-                  <Mail size={28} color={colors.emerald600} />
-                </View>
-                <Text style={styles.title}>Check your inbox</Text>
-                <Text style={styles.subtitle}>
-                  Your email shows which device asked to sign in and your 6-digit code for{'\n'}
+              <View style={[styles.otpHeader, isDesktop && styles.otpHeaderLeft]}>
+                {isDesktop ? null : (
+                  <View style={styles.mailIconWrap}>
+                    <Mail size={28} color={colors.emerald600} />
+                  </View>
+                )}
+                <Text style={[styles.title, isDesktop && styles.titleLeft]}>Check your inbox</Text>
+                <Text style={[styles.subtitle, isDesktop && styles.subtitleLeft]}>
+                  Your email shows which device asked to sign in and your 6-digit code for
+                  {isDesktop ? ' ' : '\n'}
                   <Text style={styles.emailHighlight}>{email}</Text>
                 </Text>
               </View>
@@ -273,7 +239,7 @@ export default function OnboardingScreen() {
                   <Shield size={18} color={colors.emerald700} />
                   <Text style={styles.deviceLockNoticeText}>
                     This account is locked to one device only. Make sure the device name in your
-                    email matches this phone or tablet.
+                    email matches this {Platform.OS === 'web' ? 'browser' : 'phone or tablet'}.
                   </Text>
                 </View>
               ) : null}
@@ -293,7 +259,7 @@ export default function OnboardingScreen() {
                 />
 
                 <Pressable
-                  style={styles.resendRow}
+                  style={[styles.resendRow, isDesktop && styles.resendLeft]}
                   onPress={handleResend}
                   disabled={resendCooldown > 0 || loading}>
                   <Text
@@ -312,7 +278,7 @@ export default function OnboardingScreen() {
 
           {error ? (
             <Animated.View entering={FadeInDown.duration(250)} style={styles.errorBanner}>
-              <Text style={styles.errorText}>{error}</Text>
+              <Text style={[styles.errorText, isDesktop && styles.errorLeft]}>{error}</Text>
             </Animated.View>
           ) : null}
 
@@ -335,9 +301,9 @@ export default function OnboardingScreen() {
             )}
           </Pressable>
 
-          <View style={styles.legalSpacer} />
+          {isDesktop ? null : <View style={styles.legalSpacer} />}
 
-          <Text style={styles.legal}>
+          <Text style={[styles.legal, isDesktop && styles.legalLeft]}>
             By continuing, you agree to vPay&apos;s{' '}
             <Text style={styles.legalLink} onPress={() => router.push('/terms')}>
               Terms of Service
@@ -348,6 +314,62 @@ export default function OnboardingScreen() {
             </Text>
             .
           </Text>
+    </>
+  );
+
+  if (isDesktop) {
+    return (
+      <DesktopLogin step={step} onChangeEmail={goBackToEmail}>
+        {form}
+      </DesktopLogin>
+    );
+  }
+
+  return (
+    <View style={styles.root}>
+      <Pressable
+        onPress={dismissKeyboard}
+        style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
+        <LinearGradient
+          colors={[colors.emerald950, colors.emerald800, colors.teal900]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.orbLarge} />
+        <View style={styles.orbSmall} />
+
+        {step === 'otp' ? (
+          <Pressable style={styles.backButton} onPress={goBackToEmail}>
+            <ArrowLeft size={20} color={colors.emerald200} />
+            <Text style={styles.backText}>Change email</Text>
+          </Pressable>
+        ) : (
+          <View style={styles.backSpacer} />
+        )}
+
+        <Animated.View entering={FadeInDown.duration(500)} style={styles.heroContent}>
+          <View style={styles.wordmarkWrap}>
+            <VPayWordmark variant="dark" width={200} height={66} />
+          </View>
+
+          <StepIndicator step={step} />
+        </Animated.View>
+      </Pressable>
+
+      <KeyboardAvoidingView
+        style={styles.sheetWrap}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView
+          contentContainerStyle={[
+            styles.sheet,
+            { paddingBottom: insets.bottom + spacing.xl },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}>
+          <Pressable onPress={dismissKeyboard} style={styles.sheetPressable}>
+            {form}
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -713,5 +735,24 @@ const styles = StyleSheet.create({
     color: colors.emerald600,
     fontWeight: '600',
     fontFamily: 'Inter_600SemiBold',
+  },
+  titleLeft: {
+    textAlign: 'left',
+    alignSelf: 'stretch',
+  },
+  subtitleLeft: {
+    textAlign: 'left',
+  },
+  otpHeaderLeft: {
+    alignItems: 'flex-start',
+  },
+  errorLeft: {
+    textAlign: 'left',
+  },
+  resendLeft: {
+    alignSelf: 'flex-start',
+  },
+  legalLeft: {
+    textAlign: 'left',
   },
 });

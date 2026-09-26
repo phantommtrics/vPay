@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { router } from 'expo-router';
+import { goBack, pushRoute, replaceRoute } from '@/lib/consumer-nav';
 import { AlertCircle, ArrowLeft, Trash2 } from 'lucide-react-native';
 import {
   ActivityIndicator,
@@ -62,7 +62,7 @@ export default function DeleteAccountScreen() {
     setSubmitting(true);
     try {
       await deleteAccount(ACCOUNT_DELETE_CONFIRMATION);
-      router.replace('/onboarding');
+      replaceRoute('/onboarding');
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Failed to delete account');
       setSubmitting(false);
@@ -74,7 +74,7 @@ export default function DeleteAccountScreen() {
       style={[styles.container, { paddingTop: insets.top + spacing.md }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={goBack}>
           <ArrowLeft size={22} color={colors.gray900} />
         </Pressable>
         <Text style={styles.screenTitle}>Delete Account</Text>
@@ -82,6 +82,7 @@ export default function DeleteAccountScreen() {
       </View>
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.content,
           { paddingBottom: insets.bottom + spacing.xl },
@@ -135,7 +136,7 @@ export default function DeleteAccountScreen() {
             </Text>
             <Pressable
               style={styles.secondaryButton}
-              onPress={() => router.push('/(tabs)/fund')}>
+              onPress={() => pushRoute('/(tabs)/fund')}>
               <Text style={styles.secondaryButtonText}>Go to Fund</Text>
             </Pressable>
           </View>
@@ -191,7 +192,11 @@ export default function DeleteAccountScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: colors.gray50,
+  },
+  scroll: {
+    flex: 1,
   },
   topBar: {
     flexDirection: 'row',

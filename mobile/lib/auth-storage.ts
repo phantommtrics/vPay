@@ -1,15 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
+import { deleteSecureItem, getSecureItem, setSecureItem } from '@/lib/secure-storage';
 
 const TOKEN_KEY = 'vpay_auth_token';
 
 export async function getToken(): Promise<string | null> {
-  return SecureStore.getItemAsync(TOKEN_KEY);
+  return getSecureItem(TOKEN_KEY);
 }
 
 export async function setToken(token: string): Promise<void> {
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await setSecureItem(TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await deleteSecureItem(TOKEN_KEY);
 }

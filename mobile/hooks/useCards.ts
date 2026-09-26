@@ -1,16 +1,54 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { useRefreshOnFocus } from '@/hooks/useRefreshOnFocus';
 import { fetchCards, updateCardStatus, deleteCard } from '@/lib/api';
 import type { CardsResponse, VirtualCardSummary } from '@/lib/types';
 
-const POLL_INTERVAL_MS = 2500;
+const PROVISION_POLL_MS = 2500;
+const WEB_BALANCE_POLL_MS = 5000;
+const PIN_BALANCE_MS = 20_000;
 
 let inflightCards: Promise<CardsResponse> | null = null;
-const pollListeners = new Set<() => void>();
-let pollTimer: ReturnType<typeof setInterval> | null = null;
+const provisionListeners = new Set<() => void>();
+let provisionTimer: ReturnType<typeof setInterval> | null = null;
 let appSub: ReturnType<typeof AppState.addEventListener> | null = null;
+
+const webBalanceListeners = new Set<() => void>();
+let webBalanceTimer: ReturnType<typeof setInterval> | null = null;
+let webVisibilityHandler: (() => void) | null = null;
+
+type CardSnapshot = {
+  cards: VirtualCardSummary[];
+  provisioning: CardsResponse['provisioning'];
+  issuance: CardsResponse['issuance'];
+  stripePublishableKey: string | null;
+  stripeConnectedAccountId: string | null;
+};
+
+const emptyProvisioning: CardsResponse['provisioning'] = { status: 'none', error: null };
+const emptyIssuance: CardsResponse['issuance'] = {
+  feeUsd: 0,
+  feeGmd: 0,
+  exchangeRate: 71,
+  required: false,
+  expiryYears: 1,
+  paid: false,
+  paidAt: null,
+  canReissue: false,
+};
+
+let snapshot: CardSnapshot | null = null;
+const snapshotListeners = new Set<() => void>();
+
+type PinnedBalance = {
+  balanceUsd: number;
+  balanceGmdEstimate: number;
+  balanceSource: VirtualCardSummary['balanceSource'];
+  until: number;
+};
+
+let pinnedBalance: PinnedBalance | null = null;
 
 function loadCards(): Promise<CardsResponse> {
   if (!inflightCards) {
@@ -21,28 +59,147 @@ function loadCards(): Promise<CardsResponse> {
   return inflightCards;
 }
 
-function notifyPollListeners() {
+async function loadCardsFresh(): Promise<CardsResponse> {
+  const pending = inflightCards;
+  if (pending) {
+    try {
+      await pending;
+    } catch {
+      // The follow-up request is the one this caller needs.
+    }
+  }
+  return loadCards();
+}
+
+function emitSnapshot() {
+  snapshotListeners.forEach((listener) => listener());
+}
+
+function isBalanceSource(value: string): value is VirtualCardSummary['balanceSource'] {
+  return value === 'stripe' || value === 'simulated' || value === 'unavailable';
+}
+
+function overlayPin(cards: VirtualCardSummary[]): VirtualCardSummary[] {
+  if (!pinnedBalance) return cards;
+  if (Date.now() >= pinnedBalance.until) {
+    pinnedBalance = null;
+    return cards;
+  }
+
+  const index = cards.findIndex((card) => card.status !== 'canceled');
+  if (index < 0) return cards;
+
+  const current = cards[index];
+  if (Math.round(current.balanceUsd * 100) === Math.round(pinnedBalance.balanceUsd * 100)) {
+    pinnedBalance = null;
+    return cards;
+  }
+
+  const next = cards.slice();
+  next[index] = {
+    ...current,
+    balance: pinnedBalance.balanceUsd,
+    balanceUsd: pinnedBalance.balanceUsd,
+    balanceGmdEstimate: pinnedBalance.balanceGmdEstimate,
+    balanceSource: pinnedBalance.balanceSource,
+  };
+  return next;
+}
+
+function commitCards(data: CardsResponse) {
+  if (snapshotListeners.size === 0) return;
+  snapshot = {
+    cards: overlayPin(data.cards),
+    provisioning: data.provisioning,
+    issuance: data.issuance,
+    stripePublishableKey: data.stripePublishableKey,
+    stripeConnectedAccountId: data.stripeConnectedAccountId,
+  };
+  emitSnapshot();
+}
+
+function replaceCard(updated: VirtualCardSummary) {
+  if (!snapshot) return;
+  snapshot = {
+    ...snapshot,
+    cards: overlayPin(snapshot.cards.map((card) => (card.id === updated.id ? updated : card))),
+  };
+  emitSnapshot();
+}
+
+/** Keep every mounted card view on the balance returned by fund or withdraw. */
+export function applyPrimaryCardBalance(balance: {
+  balanceUsd: number;
+  balanceGmdEstimate: number;
+  balanceSource: string;
+}) {
+  if (!snapshot) return;
+  pinnedBalance = {
+    balanceUsd: balance.balanceUsd,
+    balanceGmdEstimate: balance.balanceGmdEstimate,
+    balanceSource: isBalanceSource(balance.balanceSource) ? balance.balanceSource : 'unavailable',
+    until: Date.now() + PIN_BALANCE_MS,
+  };
+  snapshot = { ...snapshot, cards: overlayPin(snapshot.cards) };
+  emitSnapshot();
+}
+
+function isPageVisible() {
+  return typeof document === 'undefined' || document.visibilityState !== 'hidden';
+}
+
+function notifyProvisionListeners() {
   if (AppState.currentState !== 'active') return;
-  pollListeners.forEach((listener) => listener());
+  provisionListeners.forEach((listener) => listener());
 }
 
 function startSharedCardPoll(onTick: () => void): () => void {
-  pollListeners.add(onTick);
-  if (!pollTimer) {
-    pollTimer = setInterval(notifyPollListeners, POLL_INTERVAL_MS);
+  provisionListeners.add(onTick);
+  if (!provisionTimer) {
+    provisionTimer = setInterval(notifyProvisionListeners, PROVISION_POLL_MS);
     appSub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') notifyPollListeners();
+      if (state === 'active') notifyProvisionListeners();
     });
   }
   return () => {
-    pollListeners.delete(onTick);
-    if (pollListeners.size === 0) {
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
+    provisionListeners.delete(onTick);
+    if (provisionListeners.size === 0) {
+      if (provisionTimer) {
+        clearInterval(provisionTimer);
+        provisionTimer = null;
       }
       appSub?.remove();
       appSub = null;
+    }
+  };
+}
+
+function startWebBalancePoll(onTick: () => void): () => void {
+  webBalanceListeners.add(onTick);
+  if (!webBalanceTimer && Platform.OS === 'web') {
+    const tick = () => {
+      if (!isPageVisible()) return;
+      webBalanceListeners.forEach((listener) => listener());
+    };
+    webBalanceTimer = setInterval(tick, WEB_BALANCE_POLL_MS);
+    if (typeof document !== 'undefined') {
+      webVisibilityHandler = () => {
+        if (document.visibilityState === 'visible') tick();
+      };
+      document.addEventListener('visibilitychange', webVisibilityHandler);
+    }
+  }
+  return () => {
+    webBalanceListeners.delete(onTick);
+    if (webBalanceListeners.size === 0) {
+      if (webBalanceTimer) {
+        clearInterval(webBalanceTimer);
+        webBalanceTimer = null;
+      }
+      if (webVisibilityHandler && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', webVisibilityHandler);
+      }
+      webVisibilityHandler = null;
     }
   };
 }
@@ -73,28 +230,47 @@ type UseCardsResult = {
 };
 
 export function useCards(enabled = true): UseCardsResult {
-  const [cards, setCards] = useState<VirtualCardSummary[]>([]);
-  const [provisioning, setProvisioning] = useState<CardsResponse['provisioning']>({
-    status: 'none',
-    error: null,
-  });
-  const [issuance, setIssuance] = useState<CardsResponse['issuance']>({
-    feeUsd: 0,
-    feeGmd: 0,
-    exchangeRate: 71,
-    required: false,
-    expiryYears: 1,
-    paid: false,
-    paidAt: null,
-    canReissue: false,
-  });
-  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(null);
-  const [stripeConnectedAccountId, setStripeConnectedAccountId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(enabled);
+  const [cards, setCards] = useState<VirtualCardSummary[]>(snapshot?.cards ?? []);
+  const [provisioning, setProvisioning] = useState<CardsResponse['provisioning']>(
+    snapshot?.provisioning ?? emptyProvisioning,
+  );
+  const [issuance, setIssuance] = useState<CardsResponse['issuance']>(
+    snapshot?.issuance ?? emptyIssuance,
+  );
+  const [stripePublishableKey, setStripePublishableKey] = useState<string | null>(
+    snapshot?.stripePublishableKey ?? null,
+  );
+  const [stripeConnectedAccountId, setStripeConnectedAccountId] = useState<string | null>(
+    snapshot?.stripeConnectedAccountId ?? null,
+  );
+  const [loading, setLoading] = useState(enabled && snapshot === null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [updatingCardId, setUpdatingCardId] = useState<string | null>(null);
-  const hasLoadedRef = useRef(false);
+  const hasLoadedRef = useRef(snapshot !== null);
+
+  const applySnapshot = useCallback(() => {
+    if (!snapshot) return;
+    setCards(snapshot.cards);
+    setProvisioning(snapshot.provisioning);
+    setIssuance(snapshot.issuance);
+    setStripePublishableKey(snapshot.stripePublishableKey);
+    setStripeConnectedAccountId(snapshot.stripeConnectedAccountId);
+    setLoading(false);
+    hasLoadedRef.current = true;
+  }, []);
+
+  useEffect(() => {
+    snapshotListeners.add(applySnapshot);
+    applySnapshot();
+    return () => {
+      snapshotListeners.delete(applySnapshot);
+      if (snapshotListeners.size === 0) {
+        snapshot = null;
+        pinnedBalance = null;
+      }
+    };
+  }, [applySnapshot]);
 
   const refresh = useCallback(async (options?: RefreshOptions) => {
     if (!enabled) return;
@@ -110,12 +286,8 @@ export function useCards(enabled = true): UseCardsResult {
     }
 
     try {
-      const data = await loadCards();
-      setCards(data.cards);
-      setProvisioning(data.provisioning);
-      setIssuance(data.issuance);
-      setStripePublishableKey(data.stripePublishableKey);
-      setStripeConnectedAccountId(data.stripeConnectedAccountId);
+      const data = silent ? await loadCards() : await loadCardsFresh();
+      commitCards(data);
     } catch (err) {
       if (!silent) {
         setError(err instanceof Error ? err.message : 'Failed to load cards');
@@ -140,11 +312,18 @@ export function useCards(enabled = true): UseCardsResult {
     });
   }, [waitingForCard, refresh]);
 
+  useEffect(() => {
+    if (!enabled || Platform.OS !== 'web') return;
+    return startWebBalancePoll(() => {
+      void refresh({ silent: true });
+    });
+  }, [enabled, refresh]);
+
   const freezeCard = useCallback(async (cardId: string) => {
     setUpdatingCardId(cardId);
     try {
       const updated = await updateCardStatus(cardId, 'inactive');
-      setCards((current) => current.map((card) => (card.id === cardId ? updated : card)));
+      replaceCard(updated);
     } finally {
       setUpdatingCardId(null);
     }
@@ -154,7 +333,7 @@ export function useCards(enabled = true): UseCardsResult {
     setUpdatingCardId(cardId);
     try {
       const updated = await updateCardStatus(cardId, 'active');
-      setCards((current) => current.map((card) => (card.id === cardId ? updated : card)));
+      replaceCard(updated);
     } finally {
       setUpdatingCardId(null);
     }
@@ -164,7 +343,7 @@ export function useCards(enabled = true): UseCardsResult {
     setUpdatingCardId(cardId);
     try {
       const result = await deleteCard(cardId);
-      setCards((current) => current.map((card) => (card.id === cardId ? result.card : card)));
+      replaceCard(result.card);
       return {
         balanceMovedGmd: result.balanceMovedGmd,
         balanceMovedUsd: result.balanceMovedUsd,

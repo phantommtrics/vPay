@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useShellSearchParams } from '@/contexts/WebShellContext';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -19,7 +19,7 @@ import { colors, radius, spacing } from '@/constants/theme';
 
 export default function TicketDetailScreen() {
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ id?: string }>();
+  const params = useShellSearchParams<{ id?: string }>();
   const ticketId = typeof params.id === 'string' ? params.id : '';
   const [ticket, setTicket] = useState<SupportTicketSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -52,7 +52,7 @@ export default function TicketDetailScreen() {
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
-      <AppStackHeader title={ticket?.ref ?? 'Ticket'} onBack={() => router.back()} />
+      <AppStackHeader title={ticket?.ref ?? 'Ticket'} />
       {loading && !ticket ? (
         <View style={styles.centered}>
           <ActivityIndicator color={colors.emerald600} />

@@ -4,7 +4,8 @@ Both apps run on **one nginx** instance. They are **separate sites** (different 
 
 | App | Domain | Stack | nginx role |
 |-----|--------|-------|------------|
-| **vPay** | `api.vpayafrica.phantommetrics.gm` | Node API + React admin | Proxy `/api/` → port 3001; serve admin static files |
+| **vPay API + admin** | `api.vpayafrica.phantommetrics.gm` | Node API + React admin | Proxy `/api/` → port 3001; serve admin static files |
+| **vPay customer** | `customer.vpayafrica.phantommetrics.gm` | Expo web (static) | Serve `/var/www/vpay-customer` only. Guide: [DEPLOY-CUSTOMER-WEB.md](./DEPLOY-CUSTOMER-WEB.md) |
 | **Ticketing** | `aps-ticketing.apswallet.gm` | PHP (was Apache2) | Serve PHP files via **php-fpm** |
 
 Stopping Apache is fine **only if** nginx replaces everything Apache did (static files + PHP via php-fpm).
@@ -181,6 +182,7 @@ sudo nginx -T 2>/dev/null | grep -E 'server_name|root |fastcgi_pass|proxy_pass'
 | Ticketing shows **vPay Admin** | `ticketing.config` uses `/var/www/vpay-admin` | Point `root` at PHP app; use php-fpm |
 | Ticketing **502** / blank PHP | php-fpm not running, wrong socket, or bad `alias` PHP block | Use `root /var/www` config below; check error log |
 | CSS/JS/images broken, HTML OK | App links to `/public/...` but nginx only serves `/ticketing/public/` | Add `location /public/` block (see below) |
+| `/phpmyadmin` returns **404** | Catch-all `location /` and no phpMyAdmin block (Apache `Alias` is gone) | Add `location ^~ /phpmyadmin` (see below) |
 
 ### Styles/CSS not loading (content works, no styling)
 
@@ -224,6 +226,34 @@ sudo nginx -t && sudo systemctl reload nginx
 ```
 
 Purge Cloudflare cache if assets still missing after fix.
+
+### `/phpmyadmin` returns 404
+
+phpMyAdmin is PHP, not a separate app to `proxy_pass`. On Apache it was usually:
+
+```apache
+Alias /phpmyadmin /usr/share/phpmyadmin
+```
+
+The ticketing site’s `location / { return 404; }` now catches that path. Add the `location ^~ /phpmyadmin` block from [ticketing.example.conf](./ticketing.example.conf) to **both** the port 80 and 443 server blocks. It uses `root /usr/share/` so `/phpmyadmin/index.php` maps to `/usr/share/phpmyadmin/index.php`, then php-fpm.
+
+```bash
+ls /usr/share/phpmyadmin/index.php
+sudo nginx -t && sudo systemctl reload nginx
+curl -sI -H "Host: aps-ticketing.apswallet.gm" http://127.0.0.1/phpmyadmin/
+# → 301 or 200, not 404
+```
+
+`fastcgi_pass` must be the same socket as ticketing (`ls /run/php/*.sock`).
+
+If the files are under the web root instead of the package path, point that location at them:
+
+```nginx
+location ^~ /phpmyadmin {
+    root /var/www;   # files at /var/www/phpmyadmin/
+    # ... same php and static locations as ticketing.example.conf
+}
+```
 
 ### JavaScript loads but does not run / features broken
 
@@ -339,6 +369,7 @@ sudo rm /var/www/html/ticketing/phpinfo-test.php   # remove after test
         │           │                                      │
         └──────────►│  aps-ticketing...   → ticketing site │
                     │    /ticketing/* ───► php-fpm + PHP files
+                    │    /phpmyadmin  ───► php-fpm + /usr/share/phpmyadmin
                     └─────────────────────────────────────┘
 
 Apache2: stopped/disabled — nginx + php-fpm handle everything

@@ -1,4 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useShellSearchParams } from '@/contexts/WebShellContext';
+import { goBack, pushRoute } from '@/lib/consumer-nav';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -9,7 +10,7 @@ import { clearStagedCredential, stageCredential } from '@/lib/credential-setup';
 import { colors, radius, spacing } from '@/constants/theme';
 
 export default function SetPasswordScreen() {
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useShellSearchParams<{ mode?: string }>();
   const mode = typeof params.mode === 'string' ? params.mode : undefined;
   const isChange = mode === 'change';
   const allowed = useCredentialSetGuard('password', mode);
@@ -24,7 +25,7 @@ export default function SetPasswordScreen() {
       return;
     }
     stageCredential('password', password);
-    router.push('/confirm-password');
+    pushRoute('/confirm-password');
   };
 
   if (!allowed) return null;
@@ -34,7 +35,7 @@ export default function SetPasswordScreen() {
       title={isChange ? 'Change password' : 'Set password'}
       onBack={() => {
         clearStagedCredential();
-        router.back();
+        goBack();
       }}>
       <View style={styles.centerBlock}>
         <Text style={styles.prompt}>Create a password</Text>

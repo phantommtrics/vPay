@@ -194,8 +194,9 @@ Ticketing is a **PHP application** that used to run on **Apache2**. After moving
 
 If ticketing shows **vPay Admin** at `https://aps-ticketing.apswallet.gm/ticketing/`, the ticketing nginx site is misconfigured.
 
-**vPay** → `api.vpayafrica.phantommetrics.gm` → `/var/www/vpay-admin` + `/api/` → Node port 3001  
-**Ticketing** → `aps-ticketing.apswallet.gm` → `/ticketing/` → **php-fpm** + PHP document root
+**vPay API + admin** → `api.vpayafrica.phantommetrics.gm` → `/var/www/vpay-admin` + `/api/` → Node port 3001  
+**vPay customer** → `customer.vpayafrica.phantommetrics.gm` → `/var/www/vpay-customer` (static only; see [DEPLOY-CUSTOMER-WEB.md](./DEPLOY-CUSTOMER-WEB.md))  
+**Ticketing** → `aps-ticketing.apswallet.gm` → `/ticketing/` and `/phpmyadmin` → **php-fpm** + PHP files
 
 Example config: [ticketing.example.conf](./ticketing.example.conf)  
 Step-by-step: [NGINX-VPAY-TICKETING.md](./NGINX-VPAY-TICKETING.md)

@@ -1,4 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useShellSearchParams } from '@/contexts/WebShellContext';
+import { goBack, pushRoute } from '@/lib/consumer-nav';
 import { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -11,7 +12,7 @@ import { clearStagedCredential, stageCredential } from '@/lib/credential-setup';
 import { colors, radius, spacing } from '@/constants/theme';
 
 export default function SetPinScreen() {
-  const params = useLocalSearchParams<{ mode?: string }>();
+  const params = useShellSearchParams<{ mode?: string }>();
   const mode = typeof params.mode === 'string' ? params.mode : undefined;
   const isChange = mode === 'change';
   const allowed = useCredentialSetGuard('pin', mode);
@@ -34,7 +35,7 @@ export default function SetPinScreen() {
     }
     advancing.current = true;
     stageCredential('pin', value);
-    router.push('/confirm-pin');
+    pushRoute('/confirm-pin');
   };
 
   if (!allowed) return null;
@@ -44,7 +45,7 @@ export default function SetPinScreen() {
       title={isChange ? 'Change PIN' : 'Set PIN'}
       onBack={() => {
         clearStagedCredential();
-        router.back();
+        goBack();
       }}>
       <View style={styles.centerBlock}>
         <Text style={styles.prompt}>Enter a 4-digit PIN</Text>

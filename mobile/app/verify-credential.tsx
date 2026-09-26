@@ -1,4 +1,5 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useShellSearchParams } from '@/contexts/WebShellContext';
+import { goBack, replaceRoute } from '@/lib/consumer-nav';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
@@ -18,7 +19,7 @@ import {
 import { colors, radius, spacing } from '@/constants/theme';
 
 export default function VerifyCredentialScreen() {
-  const params = useLocalSearchParams<{ next?: string }>();
+  const params = useShellSearchParams<{ next?: string }>();
   const { user } = useAuth();
   const { credentialType } = useAppLock();
   const currentType = credentialType ?? user?.appLockType ?? null;
@@ -30,7 +31,7 @@ export default function VerifyCredentialScreen() {
 
   useEffect(() => {
     if (user && !currentType) {
-      router.replace('/security');
+      replaceRoute('/security');
     }
   }, [user, currentType]);
 
@@ -44,16 +45,16 @@ export default function VerifyCredentialScreen() {
     const dest = nextAfterVerify(params.next as CredentialNext | undefined, currentType);
     markCredentialReauth(value);
     if (dest.params) {
-      router.replace({ pathname: dest.pathname, params: dest.params });
+      replaceRoute({ pathname: dest.pathname, params: dest.params });
       return;
     }
-    router.replace(dest.pathname);
+    replaceRoute(dest.pathname);
   };
 
   const submit = async (value: string) => {
     if (advancing.current || checking || !value) return;
     if (!currentType) {
-      router.replace('/security');
+      replaceRoute('/security');
       return;
     }
 
@@ -92,7 +93,7 @@ export default function VerifyCredentialScreen() {
       title={title}
       onBack={() => {
         clearCredentialChangeSession();
-        router.back();
+        goBack();
       }}>
       <View style={styles.centerBlock}>
         <Text style={styles.prompt}>{prompt}</Text>

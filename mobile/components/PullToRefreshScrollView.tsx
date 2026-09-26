@@ -16,6 +16,8 @@ type PullToRefreshScrollViewProps = ScrollViewProps & {
   refreshing: boolean;
   onRefresh: () => void | Promise<void>;
   children: ReactNode;
+  /** When false, the scroll view sizes to its content instead of filling the parent. */
+  fill?: boolean;
 };
 
 export function PullToRefreshScrollView({
@@ -23,15 +25,17 @@ export function PullToRefreshScrollView({
   onRefresh,
   children,
   contentContainerStyle,
+  fill = true,
   ...scrollProps
 }: PullToRefreshScrollViewProps) {
   const insets = useSafeAreaInsets();
   const progressViewOffset = insets.top + spacing.sm;
 
   return (
-    <View style={styles.container}>
+    <View style={fill ? styles.container : undefined}>
       <ScrollView
         {...scrollProps}
+        style={fill ? [styles.flex, scrollProps.style] : scrollProps.style}
         contentContainerStyle={contentContainerStyle}
         refreshControl={
           <RefreshControl
@@ -62,6 +66,10 @@ export function PullToRefreshScrollView({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    minHeight: 0,
+  },
+  flex: {
     flex: 1,
   },
   refreshOverlay: {

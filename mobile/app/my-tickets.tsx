@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { router } from 'expo-router';
+import { pushRoute } from '@/lib/consumer-nav';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -58,7 +58,7 @@ export default function MyTicketsScreen() {
           renderItem={({ item }) => (
             <SupportTicketRow
               ticket={item}
-              onPress={() => router.push(`/ticket/${item.id}`)}
+              onPress={() => pushRoute(`/ticket/${item.id}`)}
             />
           )}
           ListEmptyComponent={

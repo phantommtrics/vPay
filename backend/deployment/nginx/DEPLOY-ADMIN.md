@@ -102,7 +102,7 @@ In `backend/.env` (or PM2 env):
 PORT=3001
 ADMIN_APP_URL=https://api.vpayafrica.phantommetrics.gm
 # Keep mobile/dev origins; add production admin origin if you use CORS elsewhere
-CORS_ORIGINS=http://localhost:5173,http://localhost:8081,https://api.vpayafrica.phantommetrics.gm
+CORS_ORIGINS=http://localhost:5173,http://localhost:8081,https://api.vpayafrica.phantommetrics.gm,https://customer.vpayafrica.phantommetrics.gm
 ```
 
 Restart backend:

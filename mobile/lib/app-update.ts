@@ -105,6 +105,15 @@ function isOutdated(config: AppUpdateConfig): boolean {
  *   users already on/above the minimum are not blocked.
  */
 export function evaluateAppUpdate(config: AppUpdateConfig): AppUpdateDecision {
+  if (Platform.OS === 'web') {
+    return {
+      updateRequired: false,
+      force: false,
+      storeUrl: null,
+      message: config.message,
+    };
+  }
+
   const storeUrl = resolveStoreUrl(config);
   const message = config.message;
   const outdated = isOutdated(config);

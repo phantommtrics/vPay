@@ -1,15 +1,15 @@
-import * as SecureStore from 'expo-secure-store';
+import { deleteSecureItem, getSecureItem, setSecureItem } from '@/lib/secure-storage';
 
 const DEVICE_ID_KEY = 'vpay_registered_device_id';
 
 export async function getRegisteredDeviceId(): Promise<string | null> {
-  return SecureStore.getItemAsync(DEVICE_ID_KEY);
+  return getSecureItem(DEVICE_ID_KEY);
 }
 
 export async function setRegisteredDeviceId(deviceId: string): Promise<void> {
-  await SecureStore.setItemAsync(DEVICE_ID_KEY, deviceId);
+  await setSecureItem(DEVICE_ID_KEY, deviceId);
 }
 
 export async function clearRegisteredDeviceId(): Promise<void> {
-  await SecureStore.deleteItemAsync(DEVICE_ID_KEY);
+  await deleteSecureItem(DEVICE_ID_KEY);
 }

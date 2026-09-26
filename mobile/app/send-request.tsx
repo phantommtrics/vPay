@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { router } from 'expo-router';
+import { replaceRoute } from '@/lib/consumer-nav';
 import { CheckCircle2, ChevronRight, Clock, Send } from 'lucide-react-native';
 import {
   ActivityIndicator,
@@ -60,7 +60,7 @@ export default function SendRequestScreen() {
 
   const goToTicket = useCallback(() => {
     if (!submittedId) return;
-    router.replace(`/ticket/${submittedId}`);
+    replaceRoute(`/ticket/${submittedId}`);
   }, [submittedId]);
 
   return (
@@ -69,6 +69,7 @@ export default function SendRequestScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <AppStackHeader title="Send a request" />
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.xl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
@@ -172,7 +173,11 @@ export default function SendRequestScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    minHeight: 0,
     backgroundColor: colors.gray50,
+  },
+  scroll: {
+    flex: 1,
   },
   content: {
     paddingHorizontal: spacing.lg,

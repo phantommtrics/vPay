@@ -11,8 +11,10 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import 'react-native-reanimated';
 
+import { AndroidWebPrompt } from '@/components/AndroidWebPrompt';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AppLockProvider } from '@/contexts/AppLockContext';
+import { WebShellProvider } from '@/contexts/WebShellContext';
 import { AppLockGate } from '@/components/AppLockGate';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ForceUpdateGate } from '@/components/ForceUpdateGate';
@@ -51,8 +53,10 @@ export default function RootLayout() {
         <ForceUpdateGate>
           <AuthProvider>
             <AppLockProvider>
+              <WebShellProvider>
               <AppLockGate>
                 <StatusBar style="dark" />
+                <AndroidWebPrompt />
                 <Stack screenOptions={{ headerShown: false }}>
                   <Stack.Screen name="index" />
                   <Stack.Screen name="(auth)" />
@@ -115,6 +119,7 @@ export default function RootLayout() {
                   />
                 </Stack>
               </AppLockGate>
+              </WebShellProvider>
             </AppLockProvider>
           </AuthProvider>
         </ForceUpdateGate>

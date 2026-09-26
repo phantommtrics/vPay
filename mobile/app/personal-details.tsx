@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { goBack } from '@/lib/consumer-nav';
 import {
   AlertCircle,
   ArrowLeft,
@@ -289,7 +289,7 @@ export default function PersonalDetailsScreen() {
 
     try {
       await submitKyc(payload);
-      router.back();
+      goBack();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit verification');
     } finally {
@@ -299,7 +299,7 @@ export default function PersonalDetailsScreen() {
 
   const handleBack = () => {
     if (stepIndex === 0) {
-      router.back();
+      goBack();
       return;
     }
     setError('');
@@ -346,6 +346,7 @@ export default function PersonalDetailsScreen() {
         </View>
 
         <ScrollView
+          style={styles.scroll}
           contentContainerStyle={[
             styles.content,
             { paddingBottom: insets.bottom + spacing.xl },
@@ -514,7 +515,7 @@ function KycLockedView({
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.md }]}>
       <View style={styles.topBar}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={goBack}>
           <ArrowLeft size={22} color={colors.gray900} />
         </Pressable>
         <Text style={styles.screenTitle}>Personal Details</Text>
@@ -522,6 +523,7 @@ function KycLockedView({
       </View>
 
       <ScrollView
+        style={styles.scroll}
         contentContainerStyle={[
           styles.lockedContent,
           { paddingBottom: insets.bottom + spacing.xl },
@@ -641,8 +643,9 @@ function ReviewRow({
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  container: { flex: 1, backgroundColor: colors.gray50 },
+  flex: { flex: 1, minHeight: 0 },
+  container: { flex: 1, minHeight: 0, backgroundColor: colors.gray50 },
+  scroll: { flex: 1 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',

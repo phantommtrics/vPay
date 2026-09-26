@@ -1,5 +1,8 @@
 import { Svg, Circle, Text as SvgText } from 'react-native-svg';
-import { StyleSheet, View } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
+
+const VISA_WORDMARK = require('@/assets/brand/visa-wordmark.png');
+const VISA_ASPECT = 734 / 264;
 
 type CardBrandMarkProps = {
   brand: string;
@@ -11,20 +14,15 @@ function normalizeBrand(brand: string): string {
 }
 
 function VisaMark({ size }: { size: number }) {
+  const height = size;
+  const width = Math.round(height * VISA_ASPECT);
+
   return (
-    <View style={[styles.badge, { width: size * 1.6, height: size }]}>
-      <Svg width={size * 1.6} height={size} viewBox="0 0 48 16">
-        <SvgText
-          x="24"
-          y="12"
-          fill="#ffffff"
-          fontSize="11"
-          fontWeight="700"
-          textAnchor="middle"
-          fontFamily="Inter">
-          VISA
-        </SvgText>
-      </Svg>
+    <View
+      accessibilityRole="image"
+      accessibilityLabel="Visa"
+      style={[styles.visaChip, { width, height }]}>
+      <Image source={VISA_WORDMARK} style={styles.visaImage} resizeMode="contain" />
     </View>
   );
 }
@@ -126,6 +124,15 @@ export function CardBrandMark({ brand, size = 32 }: CardBrandMarkProps) {
 }
 
 const styles = StyleSheet.create({
+  visaChip: {
+    borderRadius: 4,
+    backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
+  },
+  visaImage: {
+    width: '100%',
+    height: '100%',
+  },
   badge: {
     borderRadius: 4,
     backgroundColor: 'rgba(255,255,255,0.15)',

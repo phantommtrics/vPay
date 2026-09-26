@@ -29,6 +29,7 @@ export function PullToRefreshFlatList<ItemT>({
     <View style={styles.container}>
       <FlatList
         {...flatListProps}
+        style={[styles.flex, flatListProps.style]}
         refreshControl={
           <RefreshControl
             refreshing={false}
@@ -57,6 +58,10 @@ export function PullToRefreshFlatList<ItemT>({
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+    minHeight: 0,
+  },
+  flex: {
     flex: 1,
   },
   refreshOverlay: {
